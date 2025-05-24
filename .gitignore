@@ -9,3 +9,13 @@ __pycache__
 
 # macos
 .DS_Store
+
+# venv
+venv
+
+# node
+node_modules
+
+# npm
+npm-debug.log*
+npm-debug.log
