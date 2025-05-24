@@ -9,6 +9,9 @@ A Python-based dependency management tool that checks for outdated packages in P
 - Support for various version specifiers (==, >=, <=, ~=, !=)
 - Beautiful console output using `rich`
 - Detailed version comparison and update suggestions
+- Fast parallel processing for checking multiple packages
+- Version caching to reduce API calls
+- One-command check and update functionality
 
 ## Installation
 
@@ -31,39 +34,41 @@ pip install -r requirements.txt
 
 ## Usage
 
-### Check Local Environment
+### Fast Check and Update
 
-To check for outdated packages in your current Python environment:
+The fastest way to check and optionally update dependencies:
 
 ```bash
+# Just check for updates
+python src/main.py check-and-update
+
+# Check and automatically update all outdated packages
+python src/main.py check-and-update --update
+
+# Check a specific GitHub repository
+python src/main.py check-and-update https://github.com/username/repo
+
+# Check and update a specific GitHub repository
+python src/main.py check-and-update https://github.com/username/repo --update
+```
+
+This command uses parallel processing and caching to make dependency checking much faster than the traditional commands.
+
+### Traditional Commands
+
+For backward compatibility, the following commands are still available:
+
+```bash
+# Check local environment
 python src/main.py check
-```
 
-### Check GitHub Repository
-
-To check dependencies from a GitHub repository's requirements.txt:
-
-```bash
+# Check GitHub repository
 python src/main.py check https://github.com/username/repo
-```
 
-The script will:
-1. Fetch the requirements.txt from the repository
-2. Parse all package names and version specifiers
-3. Check each package against PyPI for newer versions
-4. Display a table of available updates
-
-### Update Packages
-
-To update a specific package:
-
-```bash
+# Update specific package
 python src/main.py update package_name
-```
 
-To update all outdated packages:
-
-```bash
+# Update all packages
 python src/main.py update-all
 ```
 
