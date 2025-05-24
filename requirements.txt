@@ -1,3 +1,9 @@
 # Add your project dependencies here
 # For example:
 # requests==2.25.1 
+
+pip-tools==7.3.0
+requests==2.31.0
+packaging==23.2
+click==8.1.7
+rich==13.7.0 
