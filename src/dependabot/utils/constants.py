@@ -8,7 +8,7 @@ GITHUB_ACCESS_TOKEN_URL = "https://github.com/login/oauth/access_token"
 
 # PR Configuration
 PR_BRANCH_NAME_PREFIX = "dep-updates/"
-PR_TITLE = "Update Dependencies"
+PR_TITLE = "Dependabot: Update Dependencies"
 PR_BODY_TEMPLATE = "Automated PR to update the following dependencies:\n\n{update_details}"
 
 # Cache Configuration
