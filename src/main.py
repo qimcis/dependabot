@@ -4,23 +4,61 @@ import click
 from rich.console import Console
 from rich.table import Table
 from packaging import version
-import pkg_resources
+import importlib.metadata
 import requests
 from typing import Dict, List, Tuple, Optional
 import re
+import json
+import os
+from functools import lru_cache
+from concurrent.futures import ThreadPoolExecutor, as_completed
+import time
 
 console = Console()
 
+# Cache for version checks (expires after 1 hour)
+VERSION_CACHE = {}
+CACHE_EXPIRY = 3600  # 1 hour in seconds
+
 def get_installed_packages() -> Dict[str, str]:
     """Get all installed packages and their versions."""
-    return {pkg.key: pkg.version for pkg in pkg_resources.working_set}
+    return {dist.metadata['Name']: dist.version for dist in importlib.metadata.distributions()}
 
+@lru_cache(maxsize=1000)
 def get_latest_version(package_name: str) -> Optional[str]:
-    """Get the latest version of a package from PyPI."""
+    """Get the latest version of a package from PyPI with caching."""
+    current_time = time.time()
+    if package_name in VERSION_CACHE:
+        cached_version, timestamp = VERSION_CACHE[package_name]
+        if current_time - timestamp < CACHE_EXPIRY:
+            return cached_version
+
     try:
         response = requests.get(f"https://pypi.org/pypi/{package_name}/json")
         if response.status_code == 200:
-            return response.json()["info"]["version"]
+            latest_version = response.json()["info"]["version"]
+            VERSION_CACHE[package_name] = (latest_version, current_time)
+            return latest_version
+        return None
+    except Exception as e:
+        console.print(f"[red]Error fetching version for {package_name}: {str(e)}[/red]")
+        return None
+
+@lru_cache(maxsize=1000)
+def get_latest_npm_version(package_name: str) -> Optional[str]:
+    """Get the latest version of a package from npm with caching."""
+    current_time = time.time()
+    if package_name in VERSION_CACHE:
+        cached_version, timestamp = VERSION_CACHE[package_name]
+        if current_time - timestamp < CACHE_EXPIRY:
+            return cached_version
+
+    try:
+        response = requests.get(f"https://registry.npmjs.org/{package_name}/latest")
+        if response.status_code == 200:
+            latest_version = response.json()["version"]
+            VERSION_CACHE[package_name] = (latest_version, current_time)
+            return latest_version
         return None
     except Exception as e:
         console.print(f"[red]Error fetching version for {package_name}: {str(e)}[/red]")
@@ -40,6 +78,36 @@ def get_packages_from_github_requirements(repo_url: str) -> List[Tuple[str, str]
     if repo_path.endswith("/"):
         repo_path = repo_path[:-1]
     
+    # Try to get package.json first
+    package_json_urls = [
+        f"https://raw.githubusercontent.com/{repo_path}/main/package.json",
+        f"https://raw.githubusercontent.com/{repo_path}/master/package.json"
+    ]
+    
+    for pkg_url in package_json_urls:
+        try:
+            response = requests.get(pkg_url, timeout=10)
+            if response.status_code == 200:
+                console.print(f"[info]Successfully fetched package.json from {pkg_url}[/info]")
+                try:
+                    pkg_data = response.json()
+                    packages = []
+                    # Check dependencies
+                    if "dependencies" in pkg_data:
+                        for pkg_name, version_spec in pkg_data["dependencies"].items():
+                            packages.append((pkg_name, version_spec))
+                    # Check devDependencies
+                    if "devDependencies" in pkg_data:
+                        for pkg_name, version_spec in pkg_data["devDependencies"].items():
+                            packages.append((pkg_name, version_spec))
+                    return packages
+                except json.JSONDecodeError:
+                    console.print(f"[red]Invalid JSON in package.json[/red]")
+                    break
+        except requests.RequestException:
+            continue
+
+    # If no package.json found, try requirements.txt
     requirements_urls = [
         f"https://raw.githubusercontent.com/{repo_path}/main/requirements.txt",
         f"https://raw.githubusercontent.com/{repo_path}/master/requirements.txt"
@@ -57,14 +125,12 @@ def get_packages_from_github_requirements(repo_url: str) -> List[Tuple[str, str]
             elif response.status_code == 404:
                 continue 
             else:
-                # console.print(f"[yellow]Failed to fetch {req_url}: HTTP {response.status_code}[/yellow]")
                 continue
-        except requests.RequestException as e:
-            # console.print(f"[red]Error fetching {req_url}: {e}[/red]")
+        except requests.RequestException:
             continue
 
     if not content:
-        console.print(f"[red]Could not find or access requirements.txt in {repo_url} (tried /main/ and /master/ branches).[/red]")
+        console.print(f"[red]Could not find or access requirements.txt or package.json in {repo_url} (tried /main/ and /master/ branches).[/red]")
         return []
     
     console.print(f"[info]Successfully fetched requirements.txt from {fetched_url}[/info]")
@@ -74,10 +140,6 @@ def get_packages_from_github_requirements(repo_url: str) -> List[Tuple[str, str]
         if not line or line.startswith("#"):
             continue
         
-        # Regex to capture package name and the rest of the specifier
-        # Handles names like 'package', 'package-name', 'package_name', 'package.name1.name2'
-        # And specifiers like ==1.2.3, >=1.2, <2.0, ~=1.1, !=1.0
-        # Also handles lines with extras like: package[extra1,extra2]==1.0.0
         match = re.match(r"^\s*([a-zA-Z0-9._-]+(?:\[[a-zA-Z0-9_,.-]+\])?)\s*([<>=!~]=?.*)?", line)
         if match:
             package_name = match.group(1)
@@ -89,13 +151,12 @@ def get_packages_from_github_requirements(repo_url: str) -> List[Tuple[str, str]
             
     return packages
 
-def check_updates(source: Optional[str] = None) -> List[Tuple[str, str, str]]:
+def check_updates_parallel(source: Optional[str] = None) -> List[Tuple[str, str, str]]:
     """
-    Check for available updates.
-    If source is a GitHub URL, checks dependencies from its requirements.txt against PyPI.
-    Otherwise, checks installed packages.
+    Check for available updates using parallel processing.
     """
     updates: List[Tuple[str, str, str]] = []
+    
     if source and (source.startswith("https://github.com/") or source.startswith("http://github.com/")):
         console.print(f"[cyan]Checking dependencies from GitHub repository: {source}[/cyan]")
         repo_packages = get_packages_from_github_requirements(source)
@@ -103,50 +164,98 @@ def check_updates(source: Optional[str] = None) -> List[Tuple[str, str, str]]:
         if not repo_packages:
             return []
 
-        for package_name, version_spec_from_req in repo_packages:
-            latest_pypi_version_str = get_latest_version(package_name)
-            if not latest_pypi_version_str:
-                # console.print(f"[yellow]Could not find {package_name} on PyPI.[/yellow]")
-                continue
-
-            current_version_for_table = version_spec_from_req if version_spec_from_req else "ANY"
-            add_to_table = False
-
-            if "==" in version_spec_from_req:
-                try:
-                    # Extract version part after ==
-                    pinned_version_str = version_spec_from_req.split("==")[1].strip()
-                    parsed_pinned_version = version.parse(pinned_version_str)
-                    parsed_latest_pypi_version = version.parse(latest_pypi_version_str)
-                    
-                    current_version_for_table = str(parsed_pinned_version) 
-                    if parsed_latest_pypi_version > parsed_pinned_version:
-                        add_to_table = True
-                except (version.InvalidVersion, IndexError) as e:
-                    # console.print(f"[yellow]Could not parse pinned version '{version_spec_from_req}' for {package_name}: {e}[/yellow]")
-                    # If parsing fails, treat as non-pinned for decision logic, but display original spec.
-                    # Add if latest PyPI version string is different from the spec string.
-                    if latest_pypi_version_str != version_spec_from_req:
-                         add_to_table = True
-            else:
-                # For non-pinned versions (ANY, >=, <=, ~=, !=) or unparseable '=='
-                # Add to table to inform user of the latest available against their specification.
-                add_to_table = True 
+        with ThreadPoolExecutor(max_workers=10) as executor:
+            future_to_package = {}
             
-            if add_to_table:
-                updates.append((package_name, current_version_for_table, latest_pypi_version_str))
+            for package_name, version_spec_from_req in repo_packages:
+                future = executor.submit(check_package_version, package_name, version_spec_from_req)
+                future_to_package[future] = (package_name, version_spec_from_req)
+            
+            for future in as_completed(future_to_package):
+                package_name, version_spec_from_req = future_to_package[future]
+                try:
+                    result = future.result()
+                    if result:
+                        updates.append(result)
+                except Exception as e:
+                    console.print(f"[red]Error checking {package_name}: {str(e)}[/red]")
     else:
         console.print("[cyan]Checking installed packages...[/cyan]")
         installed_packages = get_installed_packages()
         if not installed_packages:
             console.print("[yellow]No packages found in the current environment.[/yellow]")
             return []
-        for package, current_installed_version in installed_packages.items():
-            latest_pkg_version = get_latest_version(package)
-            if latest_pkg_version and version.parse(latest_pkg_version) > version.parse(current_installed_version):
-                updates.append((package, current_installed_version, latest_pkg_version))
+
+        with ThreadPoolExecutor(max_workers=10) as executor:
+            future_to_package = {}
+            
+            for package, current_version in installed_packages.items():
+                future = executor.submit(check_installed_package, package, current_version)
+                future_to_package[future] = package
+            
+            for future in as_completed(future_to_package):
+                package = future_to_package[future]
+                try:
+                    result = future.result()
+                    if result:
+                        updates.append(result)
+                except Exception as e:
+                    console.print(f"[red]Error checking {package}: {str(e)}[/red]")
     
     return updates
+
+def check_package_version(package_name: str, version_spec_from_req: str) -> Optional[Tuple[str, str, str]]:
+    """Check a single package version and return update info if available."""
+    latest_version = get_latest_npm_version(package_name)
+    if latest_version:
+        current_version_for_table = version_spec_from_req if version_spec_from_req else "ANY"
+        add_to_table = False
+
+        if version_spec_from_req.startswith("^") or version_spec_from_req.startswith("~"):
+            try:
+                clean_version = version_spec_from_req[1:]
+                if version.parse(latest_version) > version.parse(clean_version):
+                    add_to_table = True
+            except version.InvalidVersion:
+                add_to_table = True
+        else:
+            add_to_table = True
+
+        if add_to_table:
+            return (package_name, current_version_for_table, latest_version)
+    
+    latest_pypi_version_str = get_latest_version(package_name)
+    if not latest_pypi_version_str:
+        return None
+
+    current_version_for_table = version_spec_from_req if version_spec_from_req else "ANY"
+    add_to_table = False
+
+    if "==" in version_spec_from_req:
+        try:
+            pinned_version_str = version_spec_from_req.split("==")[1].strip()
+            parsed_pinned_version = version.parse(pinned_version_str)
+            parsed_latest_pypi_version = version.parse(latest_pypi_version_str)
+            
+            current_version_for_table = str(parsed_pinned_version) 
+            if parsed_latest_pypi_version > parsed_pinned_version:
+                add_to_table = True
+        except (version.InvalidVersion, IndexError):
+            if latest_pypi_version_str != version_spec_from_req:
+                add_to_table = True
+    else:
+        add_to_table = True 
+    
+    if add_to_table:
+        return (package_name, current_version_for_table, latest_pypi_version_str)
+    return None
+
+def check_installed_package(package: str, current_version: str) -> Optional[Tuple[str, str, str]]:
+    """Check a single installed package and return update info if available."""
+    latest_version = get_latest_version(package)
+    if latest_version and version.parse(latest_version) > version.parse(current_version):
+        return (package, current_version, latest_version)
+    return None
 
 def display_updates(updates: List[Tuple[str, str, str]]):
     """Display available updates in a nice table format."""
@@ -180,34 +289,60 @@ def cli():
     """Dependency Management Bot - Automatically manage and update your Python dependencies."""
     pass
 
-@cli.command()
+@cli.command(name='check')
 @click.argument('source', required=False, default=None, type=str)
 def check(source: Optional[str]):
     """
     Check for available updates.
     Checks installed packages by default.
     Or, provide a GitHub repository URL (e.g., https://github.com/user/repo)
-    to check dependencies from its requirements.txt against PyPI.
+    to check dependencies from its requirements.txt or package.json against PyPI/npm.
     """
-    updates_found = check_updates(source)
-    display_updates(updates_found)
+    updates = check_updates_parallel(source)
+    display_updates(updates)
 
-@cli.command()
+@cli.command(name='update')
 @click.argument('package_name')
 def update(package_name):
     """Update a specific package to its latest version."""
     update_package(package_name)
 
-@cli.command()
+@cli.command(name='update-all')
 def update_all():
     """Update all outdated packages."""
-    updates = check_updates()
+    updates = check_updates_parallel()
     if not updates:
         console.print("[green]All packages are up to date![/green]")
         return
 
     for package, _, _ in updates:
         update_package(package)
+
+@cli.command(name='check-and-update')
+@click.argument('source', required=False, default=None, type=str)
+@click.option('--update/--no-update', default=False, help='Automatically update packages after checking')
+def check_and_update(source: Optional[str], update: bool):
+    """
+    Check for available updates and optionally update them.
+    This is a faster version that uses parallel processing and caching.
+    """
+    start_time = time.time()
+    updates = check_updates_parallel(source)
+    end_time = time.time()
+    
+    display_updates(updates)
+    console.print(f"[cyan]Check completed in {end_time - start_time:.2f} seconds[/cyan]")
+    
+    if update and updates:
+        console.print("[yellow]Updating packages...[/yellow]")
+        with ThreadPoolExecutor(max_workers=5) as executor:
+            futures = [executor.submit(update_package, package) for package, _, _ in updates]
+            for future in as_completed(futures):
+                try:
+                    future.result()
+                except Exception as e:
+                    console.print(f"[red]Error during update: {str(e)}[/red]")
+        console.print("[green]All updates completed![/green]")
 
 def main():
     cli()
