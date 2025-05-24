@@ -92,7 +92,10 @@ def create_github_pr(repo_url: str, dependency_file_path: str, dep_type: str, or
             print_info("File content unchanged after update generation. No PR needed.")
             return None
 
-        update_details_for_pr_body = "\n".join([f"- `{pkg}` to `{new_ver}` (was `{curr_ver}`)" for pkg, curr_ver, new_ver in updates_to_apply])
+        # Generate update_details as Markdown table rows
+        update_details_for_pr_body = "\n".join([
+            f"| `{pkg}` | `{curr_ver}` | `{new_ver}` |" for pkg, curr_ver, new_ver in updates_to_apply
+        ])
         commit_message = f"Update {dep_type.upper()} dependencies"
         pr_body = PR_BODY_TEMPLATE.format(update_details=update_details_for_pr_body)
 
