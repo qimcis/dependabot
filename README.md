@@ -46,6 +46,45 @@ This script is a command-line tool to help manage and update your Python and Nod
     ```
     (`importlib-metadata` is generally included with Python 3.8+ but good to list for older versions or specific environments).
 
+## Development Setup: Using a Virtual Environment
+
+It is recommended to use a Python virtual environment to isolate dependencies and avoid conflicts with system packages.
+
+### 1. Create a virtual environment
+```sh
+python3 -m venv venv
+```
+
+### 2. Activate the virtual environment
+```sh
+source venv/bin/activate
+```
+
+### 3. (Optional) Upgrade pip
+```sh
+pip install --upgrade pip
+```
+
+### 4. Install dependencies
+If you have a `requirements.txt` or want to install the package in editable mode:
+```sh
+pip install -e .
+# or
+pip install -r requirements.txt
+```
+
+### 5. Run the tool
+```sh
+python src/main.py ...
+# or
+python -m src.main ...
+```
+
+When finished, you can deactivate the environment with:
+```sh
+deactivate
+```
+
 ## How to Use
 
 The script is run from the command line using `python src/main.py` followed by a command.
