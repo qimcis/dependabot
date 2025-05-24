@@ -1,116 +1,146 @@
-# Dependabot
+# Dependency Management Bot (Dependabot CLI Clone)
 
-A Python-based dependency management tool that checks for outdated packages in Python projects and GitHub repositories.
+This script is a command-line tool to help manage and update your Python and Node.js package dependencies. It can check for outdated packages in your local environment or in a remote GitHub repository, and can propose updates via a Pull Request to a GitHub repository.
 
 ## Features
 
-- Check for outdated packages in your local Python environment
-- Check dependencies from any GitHub repository's `requirements.txt`
-- Support for various version specifiers (==, >=, <=, ~=, !=)
-- Beautiful console output using `rich`
-- Detailed version comparison and update suggestions
-- Fast parallel processing for checking multiple packages
-- Version caching to reduce API calls
-- One-command check and update functionality
+-   **Local Environment Check:**
+    -   Scans your currently installed Python (`pip`) packages.
+    -   Identifies packages with newer versions available on PyPI.
+-   **GitHub Repository Check:**
+    -   Scans a public GitHub repository for `requirements.txt` (pip) or `package.json` (npm).
+    -   Supports specifying a path to the dependency file if it's not in the repository root (using `--dfp`).
+    -   Compares declared dependencies against their latest versions on PyPI or npm.
+-   **Display Updates:**
+    -   Shows available updates in a clean table format using `rich`.
+-   **Update Packages Locally:**
+    -   `update <package_name>`: Updates a specific locally installed pip package.
+    -   `update-all`: Updates all outdated locally installed pip packages.
+    -   `check-and-update`: Checks and then updates all local pip packages.
+-   **Propose Updates to GitHub Repositories (via Pull Request):**
+    -   The `propose-updates` command checks a GitHub repository.
+    -   If updates are found, it prompts the user for confirmation.
+    -   Uses **GitHub OAuth Device Flow** for secure authentication (user authorizes in browser).
+    -   Creates a new branch in the target repository.
+    -   Commits the updated dependency file (`requirements.txt` or `package.json`).
+    -   Opens a Pull Request with the proposed changes.
+-   **Caching:** Caches version information from PyPI/npm for a short period to speed up repeated checks.
+-   **Parallel Processing:** Uses thread pools for faster checking of multiple packages.
+
+## Prerequisites
+
+-   Python 3.7+
+-   `pip` (for installing Python dependencies)
 
 ## Installation
 
-1. Clone this repository:
+1.  **Clone the repository (or download the script):**
+    ```bash
+    git clone https://github.com/qimcis/dependabot 
+    cd dependabot 
+    ```
+
+2.  **Install required Python libraries:**
+    ```bash
+    pip install click rich packaging requests PyGithub importlib-metadata
+    ```
+    (`importlib-metadata` is generally included with Python 3.8+ but good to list for older versions or specific environments).
+
+## How to Use
+
+The script is run from the command line using `python src/main.py` followed by a command.
+
+**Available Commands:**
+
+### `check`
+Checks for available updates.
+-   **Check local environment (pip packages):**
+    ```bash
+    python src/main.py check
+    ```
+-   **Check a GitHub repository (pip or npm, dependency file in root):**
+    ```bash
+    python src/main.py check https://github.com/user/repo
+    ```
+-   **Check a specific dependency file in a GitHub repository:**
+    ```bash
+    python src/main.py check https://github.com/user/repo --dfp path/to/your/requirements.txt
+    python src/main.py check https://github.com/user/repo --dfp client/package.json
+    ```
+    (`--dfp` stands for "dependency file path")
+
+### `update <package_name>`
+Updates a specific locally installed pip package to its latest version.
 ```bash
-git clone https://github.com/yourusername/dependabot.git
-cd dependabot
+python src/main.py update requests
 ```
 
-2. Create and activate a virtual environment:
+### `update-all`
+Updates all outdated locally installed pip packages.
 ```bash
-python3 -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-```
-
-3. Install dependencies:
-```bash
-pip install -r requirements.txt
-```
-
-## Usage
-
-### Fast Check and Update
-
-The fastest way to check and optionally update dependencies:
-
-```bash
-# Just check for updates
-python src/main.py check-and-update
-
-# Check and automatically update all outdated packages
-python src/main.py check-and-update --update
-
-# Check a specific GitHub repository
-python src/main.py check-and-update https://github.com/username/repo
-
-# Check and update a specific GitHub repository
-python src/main.py check-and-update https://github.com/username/repo --update
-```
-
-This command uses parallel processing and caching to make dependency checking much faster than the traditional commands.
-
-### Traditional Commands
-
-For backward compatibility, the following commands are still available:
-
-```bash
-# Check local environment
-python src/main.py check
-
-# Check GitHub repository
-python src/main.py check https://github.com/username/repo
-
-# Update specific package
-python src/main.py update package_name
-
-# Update all packages
 python src/main.py update-all
 ```
 
-## Version Specifier Support
+### `check-and-update`
+Checks for updates and optionally updates them. For local pip environment or specified GitHub dependency file.
+-   **Check and update local environment:**
+    ```bash
+    python src/main.py check-and-update --update
+    ```
+-   **Check GitHub repo and then decide (update action is local if used):**
+    ```bash
+    python src/main.py check-and-update https://github.com/user/repo --dfp path/to/requirements.txt 
+    # If you add --update here, it currently attempts local package updates based on the check.
+    ```
+*(Note: The `--update` flag with a GitHub repo URL in `check-and-update` will warn that it updates local packages, not the remote repo directly. Use `propose-updates` for remote repos.)*
 
-The script understands various version specifiers in requirements.txt:
-- `==1.2.3` (exact version)
-- `>=1.2.0` (minimum version)
-- `<=2.0.0` (maximum version)
-- `~=1.2.0` (compatible release)
-- `!=1.2.3` (excluded version)
-- No specifier (any version)
+### `propose-updates <repo_url>`
+Checks a GitHub repository for outdated pip or npm dependencies and, if updates are found, proposes a Pull Request.
 
-## Output Example
+-   **Propose updates for a repository (dependency file in root):**
+    ```bash
+    python src/main.py propose-updates https://github.com/owner/repository-name
+    ```
+-   **Propose updates for a specific dependency file in a repository:**
+    ```bash
+    python src/main.py propose-updates https://github.com/owner/repo --dfp backend/requirements.txt
+    ```
 
-```
-                    Available Updates                    
-┏━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━┓
-┃ Package            ┃ Current Version ┃ Latest Version ┃
-┡━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━┩
-│ requests           │ 2.31.0          │ 2.32.3         │
-│ rich               │ 13.7.0          │ 14.0.0         │
-└────────────────────┴─────────────────┴────────────────┘
-```
+**Authorization for `propose-updates`:**
+When you run `propose-updates` for the first time (or if your previous authorization is no longer valid), the script will initiate the GitHub OAuth Device Flow:
+1.  It will display a URL (e.g., `https://github.com/login/device`) and a user code.
+2.  It will attempt to open this URL in your default web browser.
+3.  You need to navigate to this URL (if it didn't open automatically), enter the user code, and authorize the OAuth App you registered (e.g., "My Dependency Updater CLI") to access your repositories with the `repo` scope. This scope is necessary to create branches and pull requests.
+4.  Once you authorize in the browser, the script will detect this and proceed.
 
-## Requirements
+The script will then:
+-   Identify outdated dependencies.
+-   Display them and ask for confirmation before creating a PR.
+-   Create a new branch (e.g., `dep-updates/pip-timestamp`).
+-   Commit the updated `requirements.txt` or `package.json`.
+-   Create a Pull Request against the repository's default branch.
 
-- Python 3.7+
-- pip
-- Internet connection (for checking PyPI)
+## Script Overview (`src/main.py`)
 
-## Dependencies
-
-- click: Command line interface creation
-- rich: Terminal formatting and styling
-- requests: HTTP requests
-- packaging: Version parsing and comparison
+-   **OAuth Handling:**
+    -   `get_github_oauth_token()`: Manages the OAuth Device Flow.
+-   **Package Information:**
+    -   `get_installed_packages()`: Gets locally installed pip packages.
+    -   `get_latest_version()`: Fetches latest pip package version from PyPI (with caching).
+    -   `get_latest_npm_version()`: Fetches latest npm package version from npm registry (with caching).
+-   **GitHub Scraping & Checking:**
+    -   `scrape_dependencies_from_github()`: Fetches and parses `requirements.txt` or `package.json` from a GitHub repo. Supports `--dfp`.
+    -   `check_updates_parallel()`: Orchestrates checking for updates (local or GitHub) using threading.
+    -   `check_package_version()`: Logic for comparing a single package's version.
+-   **PR Creation:**
+    -   `generate_new_dependency_file_content()`: Creates the string content for the updated dependency file.
+    -   `create_github_pr()`: Handles creating the branch, committing the file, and opening the PR using `PyGithub`.
+-   **CLI Commands:** Defined using `click`, mapping to the functionalities above.
 
 ## Contributing
 
-Contributions are welcome! Please feel free to submit a Pull Request.
+Feel free to fork this repository, make improvements, and submit pull requests!
 
 ## License
 
-This project is licensed under the MIT License - see the LICENSE file for details.
+MIT License 
