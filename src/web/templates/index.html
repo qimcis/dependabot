@@ -140,6 +140,7 @@
         <section id="results" class="hidden relative rounded-lg border border-gray-200 p-6 mb-10">
             <button id="clearResultsBtn" type="button" class="absolute top-4 right-4 bg-white/70 hover:bg-white text-gray-600 rounded-full px-3 py-1 font-instrument-serif shadow border border-gray-200 transition text-base" title="Clear results">Clear</button>
             <h2 id="resultsTitle" class="font-instrument-serif text-xl font-semibold text-gray-900 mb-4">Results:</h2>
+            <div id="resultsContentControls" class="flex flex-col sm:flex-row sm:items-center gap-2 mb-4"></div>
             <div id="resultsContent" class="space-y-4">
             </div>
         </section>
@@ -264,81 +265,64 @@
         // UI helpers 
         function displayResults(updates) {
             if (!updates || updates.length === 0) {
-                document.getElementById('resultsTitle').innerHTML = 'Results'; // Keep consistent title
+                document.getElementById('resultsTitle').innerHTML = 'Results';
                 resultsContent.innerHTML = '<div class="text-green-600 p-4">All dependencies are up to date!</div>';
                 results.classList.remove('hidden');
-                status.classList.add('hidden'); 
+                status.classList.add('hidden');
                 localStorage.setItem('resultsHtml', resultsContent.innerHTML);
+                document.getElementById('resultsContentControls').innerHTML = '';
                 return;
             }
-
-            // Extract owner/repo from the global repoUrl
-            let repoUrl = repoUrlGlobal || document.getElementById('repoUrl').value.trim();
-            let ownerRepo = '';
-            let owner = '', repo = '';
-            try {
-                const match = repoUrl.match(/github\.com\/(.+?)\/(.+?)(?:$|\/|\?|#)/);
-                if (match) {
-                    ownerRepo = `${match[1]}/${match[2]}`;
-                    owner = match[1];
-                    repo = match[2];
-                }
-            } catch {}
-
-            // Update Results title with count and repo info
-            document.getElementById('resultsTitle').innerHTML = `Results <span class="text-red-600 font-normal text-lg ml-2">Found ${updates.length} outdated package(s).</span>` +
-                (owner && repo ? `<div class='font-instrument-serif text-2xl text-gray-800 mt-4 flex flex-row justify-center items-center gap-x-12'>
-                    <span><span class=\"text-gray-500 text-lg font-normal mr-2\">Owner:</span> <span class=\"font-bold\">${owner}</span></span>
-                    <span><span class=\"text-gray-500 text-lg font-normal mr-2\">Repo:</span> <span class=\"font-bold\">${repo}</span></span>
-                    <a href='https://github.com/${owner}/${repo}' target='_blank' rel='noopener noreferrer' class='flex items-center text-blue-600 hover:underline font-normal text-lg'>
-                        <svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='currentColor' class='w-6 h-6 mr-2'><path d='M12 2C6.477 2 2 6.484 2 12.021c0 4.428 2.865 8.184 6.839 9.504.5.092.682-.217.682-.483 0-.237-.009-.868-.014-1.703-2.782.605-3.369-1.342-3.369-1.342-.454-1.157-1.11-1.465-1.11-1.465-.908-.62.069-.608.069-.608 1.004.07 1.532 1.032 1.532 1.032.892 1.53 2.341 1.088 2.91.832.091-.647.35-1.088.636-1.339-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.987 1.029-2.686-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.025A9.564 9.564 0 0 1 12 6.844c.85.004 1.705.115 2.504.337 1.909-1.295 2.748-1.025 2.748-1.025.546 1.378.202 2.397.1 2.65.64.699 1.028 1.593 1.028 2.686 0 3.847-2.338 4.695-4.566 4.944.359.309.678.919.678 1.852 0 1.336-.012 2.417-.012 2.747 0 .268.18.579.688.481C19.138 20.203 22 16.447 22 12.021 22 6.484 17.523 2 12 2Z'/></svg>
-                        View on GitHub
-                    </a>
-                </div>` : '');
-
-            // Create table html
-            const tableBody = updates.map(u => `
-                <tr>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                        <a href="https://www.npmjs.com/package/${u.package}" target="_blank" rel="noopener noreferrer" class="text-blue-500 hover:underline">
-                            ${u.package}
-                        </a>
-                    </td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm ${u.current !== u.latest ? 'bg-yellow-50 text-yellow-800 font-semibold' : 'text-gray-500'}">
-                        ${u.current}
-                        ${u.current !== u.latest ? '<span title="Outdated" class="ml-1 text-red-500">&#8593;</span>' : ''}
-                    </td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm ${u.current !== u.latest ? 'bg-red-50 text-red-700 font-semibold' : 'text-gray-500'}">
-                        ${u.latest}
-                    </td>
-                </tr>
-            `).join('');
-
-            resultsContent.innerHTML = `
-                <div class="overflow-x-auto max-h-96 overflow-y-auto custom-scrollbar">
-                    <table class="min-w-full divide-y divide-gray-200">
-                        <thead class="bg-gray-100">
-                            <tr>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">PACKAGE NAME</th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Current Version</th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Latest Version</th>
-                            </tr>
-                        </thead>
-                        <tbody class="bg-white divide-y divide-gray-200">${tableBody}</tbody>
-                    </table>
-                </div>
-                <div class="mt-6 text-center">
-                    <button id="createPrBtn"
-                            class="w-full px-6 py-3 rounded-full font-instrument-serif text-xl text-white bg-gradient-to-b from-blue-200 via-blue-500 to-blue-300 shadow-lg hover:shadow-xl hover:scale-105 active:scale-95 transform transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-blue-300 focus:ring-opacity-75">
-                        Make Pull Request
-                    </button>
-                </div>
-            `;
+            // Add search input
+            document.getElementById('resultsContentControls').innerHTML = `<input id="depSearchInput" type="text" placeholder="Search packages..." class="border border-gray-300 rounded px-2 py-1 font-instrument-serif text-sm w-full sm:w-64" />`;
+            let searchVal = '';
+            let filtered = updates;
+            const renderTable = () => {
+                searchVal = (document.getElementById('depSearchInput')?.value || '').toLowerCase();
+                filtered = updates.filter(u => u.package.toLowerCase().includes(searchVal));
+                const tableBody = filtered.map(u => `
+                    <tr>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                            <a href="https://www.npmjs.com/package/${u.package}" target="_blank" rel="noopener noreferrer" class="text-blue-500 hover:underline">
+                                ${u.package}
+                            </a>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm ${u.current !== u.latest ? 'bg-yellow-50 text-yellow-800 font-semibold' : 'text-gray-500'}">
+                            ${u.current}
+                            ${u.current !== u.latest ? '<span title="Outdated" class="ml-1 text-red-500">&#8593;</span>' : ''}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm ${u.current !== u.latest ? 'bg-red-50 text-red-700 font-semibold' : 'text-gray-500'}">
+                            ${u.latest}
+                        </td>
+                    </tr>
+                `).join('');
+                resultsContent.innerHTML = `
+                    <div class="overflow-x-auto max-h-96 overflow-y-auto custom-scrollbar">
+                        <table class="min-w-full divide-y divide-gray-200">
+                            <thead class="bg-gray-100">
+                                <tr>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">PACKAGE NAME</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Current Version</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Latest Version</th>
+                                </tr>
+                            </thead>
+                            <tbody class="bg-white divide-y divide-gray-200">${tableBody}</tbody>
+                        </table>
+                    </div>
+                    <div class="mt-6 text-center">
+                        <button id="createPrBtn"
+                                class="w-full px-6 py-3 rounded-full font-instrument-serif text-xl text-white bg-gradient-to-b from-blue-200 via-blue-500 to-blue-300 shadow-lg hover:shadow-xl hover:scale-105 active:scale-95 transform transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-blue-300 focus:ring-opacity-75">
+                            Make Pull Request
+                        </button>
+                    </div>
+                `;
+                document.getElementById('createPrBtn').addEventListener('click', startPrFlow);
+            };
+            renderTable();
+            document.getElementById('depSearchInput').oninput = renderTable;
             results.classList.remove('hidden');
-            status.classList.add('hidden'); // Keep status hidden until PR button is clicked
+            status.classList.add('hidden');
             localStorage.setItem('resultsHtml', resultsContent.innerHTML);
-
-            document.getElementById('createPrBtn').addEventListener('click', startPrFlow);
         }
 
         async function startPrFlow() {
