@@ -8,7 +8,7 @@ import os
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from main import (
+from ..main import (
     check_updates_parallel,
     create_github_pr,
     GITHUB_OAUTH_CLIENT_ID,
