@@ -401,11 +401,11 @@
                   </div>
                   <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1">PR Message</label>
-                    <textarea id="prBodyInput" rows="5" class="w-full border border-gray-300 rounded-md px-3 py-2 font-instrument-serif resize-none" required>${data.default_pr_body || ''}</textarea>
+                    <textarea id="prBodyInput" rows="5" class="w-full border border-gray-300 rounded-md px-3 py-2 font-instrument-serif resize-none custom-scrollbar" required>${data.default_pr_body || ''}</textarea>
                   </div>
                   <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1">Dependency Updates Preview</label>
-                    <div id="prDiffPreview" class="overflow-x-auto overflow-y-auto max-h-64 text-sm font-mono bg-gray-50 rounded p-2 border border-gray-200 resize-none">${diffTable}</div>
+                    <div id="prDiffPreview" class="overflow-x-auto overflow-y-auto max-h-64 text-sm font-mono bg-gray-50 rounded p-2 border border-gray-200 resize-none custom-scrollbar">${diffTable}</div>
                   </div>
                   <div class="flex justify-end gap-2 mt-4">
                     <button type="button" id="cancelPrBtn" class="px-4 py-2 rounded-md border border-gray-300 bg-white text-gray-700 hover:bg-gray-100 font-instrument-serif">Cancel</button>
