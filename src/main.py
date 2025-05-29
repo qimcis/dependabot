@@ -509,7 +509,7 @@ def generate_new_dependency_file_content(original_content: str, dep_type: str, u
             
     return new_content
 
-def create_github_pr(repo_url: str, dependency_file_path: str, dep_type: str, original_file_content: str, updates_to_apply: List[Tuple[str, str, str]], oauth_token: str) -> Optional[str]:
+def create_github_pr(repo_url: str, dependency_file_path: str, dep_type: str, original_file_content: str, updates_to_apply: List[Tuple[str, str, str]], oauth_token: str, pr_title: Optional[str] = None, pr_body: Optional[str] = None) -> Optional[str]:
     """Creates a GitHub PR with the updated dependency file using an OAuth token."""
     if not PYGITHUB_AVAILABLE:
         console.print("[red]PyGithub library is not installed. Cannot create PR. Please run: pip install PyGithub[/red]")
@@ -549,7 +549,10 @@ def create_github_pr(repo_url: str, dependency_file_path: str, dep_type: str, or
 
         update_details_for_pr_body = "\n".join([f"- `{pkg}` to `{new_ver}` (was `{curr_ver}`)" for pkg, curr_ver, new_ver in updates_to_apply])
         commit_message = f"Update {dep_type.upper()} dependencies"
-        pr_body = PR_BODY_TEMPLATE.format(update_details=update_details_for_pr_body)
+        
+        # Use provided PR body or generate default
+        if pr_body is None:
+            pr_body = PR_BODY_TEMPLATE.format(update_details=update_details_for_pr_body)
 
         try:
             file_contents_obj = repo.get_contents(dependency_file_path, ref=new_branch_name)
@@ -573,9 +576,11 @@ def create_github_pr(repo_url: str, dependency_file_path: str, dep_type: str, or
 
         console.print(f"[info]Commit successful: {update_result['commit'].sha}[/info]")
 
-        console.print(f"[info]Creating PR: {PR_TITLE}[/info]")
+        # Use provided PR title or default
+        final_pr_title = pr_title if pr_title is not None else PR_TITLE
+        console.print(f"[info]Creating PR: {final_pr_title}[/info]")
         pull_request = repo.create_pull(
-            title=PR_TITLE,
+            title=final_pr_title,
             body=pr_body,
             head=new_branch_name,
             base=source_branch_name
