@@ -5,6 +5,7 @@ from typing import Dict, Any, Optional, List, Tuple
 import requests
 import sys
 import os
+import json
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -68,11 +69,41 @@ def check_dependencies():
         repo_url, dependency_file_path
     )
 
+    # --- Add dev property for npm dependencies ---
+    response_updates = []
+    if dep_type == "npm":
+        # Fetch package.json to distinguish devDependencies
+        repo_path_cleaned = repo_url.replace("https://github.com/", "").replace("http://github.com/", "")
+        if repo_path_cleaned.endswith("/"):
+            repo_path_cleaned = repo_path_cleaned[:-1]
+        owner_repo = "/".join(repo_path_cleaned.split("/")[:2])
+        package_json_url = None
+        for branch in ["main", "master"]:
+            url = f"https://raw.githubusercontent.com/{owner_repo}/{branch}/{dep_file_path or 'package.json'}"
+            try:
+                resp = requests.get(url, timeout=10)
+                if resp.status_code == 200:
+                    package_json_url = url
+                    pkg_data = json.loads(resp.text)
+                    break
+            except Exception:
+                continue
+        dev_pkgs = set(pkg_data.get("devDependencies", {}).keys()) if package_json_url else set()
+        for p, c, l in updates:
+            response_updates.append({
+                "package": p,
+                "current": c,
+                "latest": l,
+                "dev": p in dev_pkgs
+            })
+    else:
+        response_updates = [
+            {"package": p, "current": c, "latest": l} for p, c, l in updates
+        ]
+
     return jsonify(
         {
-            "updates": [
-                {"package": p, "current": c, "latest": l} for p, c, l in updates
-            ],
+            "updates": response_updates,
             "dependency_type": dep_type,
             "dependency_file": dep_file_path,
         }

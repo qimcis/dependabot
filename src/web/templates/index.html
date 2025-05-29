@@ -277,21 +277,13 @@
             document.getElementById('resultsContentControls').innerHTML = `
               <div class="flex flex-row gap-2 items-center">
                 <input id="depSearchInput" type="text" placeholder="Search packages..." class="border border-gray-300 rounded px-2 py-1 font-instrument-serif text-sm w-full sm:w-64" />
-                <label class="inline-flex items-center ml-2 font-instrument-serif text-sm">
-                  <input type="checkbox" id="devDepsToggle" class="form-checkbox mr-1" checked /> Show dev dependencies
-                </label>
               </div>
             `;
             let searchVal = '';
             let filtered = updates;
-            let showDevDeps = true;
             const renderTable = () => {
                 searchVal = (document.getElementById('depSearchInput')?.value || '').toLowerCase();
-                showDevDeps = document.getElementById('devDepsToggle')?.checked;
-                filtered = updates.filter(u => {
-                    if (!showDevDeps && u.dev) return false;
-                    return u.package.toLowerCase().includes(searchVal);
-                });
+                filtered = updates.filter(u => u.package.toLowerCase().includes(searchVal));
                 const tableBody = filtered.map(u => `
                     <tr>
                         <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
@@ -332,7 +324,6 @@
             };
             renderTable();
             document.getElementById('depSearchInput').oninput = renderTable;
-            document.getElementById('devDepsToggle').onchange = renderTable;
             results.classList.remove('hidden');
             status.classList.add('hidden');
             localStorage.setItem('resultsHtml', resultsContent.innerHTML);
