@@ -87,7 +87,7 @@
 
         <!-- Action Card -->
         <section class="max-w-5xl w-full mx-auto rounded-lg border border-gray-200 p-4 sm:p-8 mb-8 sm:mb-12">
-            <div id="repoQuickAccess" class="mb-4 relative"></div>
+            <div id="repoQuickAccess" class="relative"></div>
             <div class="mb-4">
                 <span class="font-instrument-serif text-2xl text-gray-900">Repository</span>
             </div>
@@ -556,6 +556,12 @@
             html += `</div>`;
           }
           container.innerHTML = html;
+          // Dynamically add or remove mb-4
+          if (stars.length || recents.length) {
+            container.classList.add('mb-4');
+          } else {
+            container.classList.remove('mb-4');
+          }
           // Add click handlers
           container.querySelectorAll('.repo-quick-link').forEach(el => {
             el.onclick = e => {
