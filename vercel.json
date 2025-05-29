@@ -8,9 +8,8 @@
       }
     ],
     "routes": [
-      { "src": "/static/Background.png", "dest": "/src/web/static/Background.png" },
-      { "src": "/static/favicon.ico", "dest": "/src/web/static/favicon.ico" },
-      { "src": "/static/(.*)", "dest": "/src/web/static/$1" },
+      { "src": "/Background.png", "dest": "/Background.png" },
+      { "src": "/favicon.ico", "dest": "/favicon.ico" },
       { "src": "/(.*)", "dest": "src/web/app.py" }
     ]
-}
+  }
