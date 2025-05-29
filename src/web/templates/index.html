@@ -83,12 +83,7 @@
                             class="flex-1 w-full px-3 py-2 sm:px-4 sm:py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                             placeholder="https://github.com/username/repo">
                         <button type="button"
-                            class="bg-white/40 text-gray-600 rounded-md px-4 py-2 font-medium hover:bg-white/70 hover:shadow transition"
-                            onclick="document.getElementById('repoUrl').form.requestSubmit();">
-                            Send
-                        </button>
-                        <button type="button"
-                            class="bg-white/40 text-gray-600 rounded-md px-4 py-2 font-medium hover:bg-white/70 hover:shadow transition"
+                            class="bg-white/40 text-gray-600 rounded-md px-4 py-2 font-instrument-serif hover:bg-white/70 hover:shadow transition"
                             onclick="document.getElementById('repoUrl').value='';">
                             Clear
                         </button>
@@ -102,12 +97,7 @@
                             class="flex-1 w-full px-3 py-2 sm:px-4 sm:py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                             placeholder="e.g., backend/requirements.txt">
                         <button type="button"
-                            class="bg-white/40 text-gray-600 rounded-md px-4 py-2 font-medium hover:bg-white/70 hover:shadow transition"
-                            onclick="document.getElementById('dependencyPath').form.requestSubmit();">
-                            Send
-                        </button>
-                        <button type="button"
-                            class="bg-white/40 text-gray-600 rounded-md px-4 py-2 font-medium hover:bg-white/70 hover:shadow transition"
+                            class="bg-white/40 text-gray-600 rounded-md px-4 py-2 font-instrument-serif hover:bg-white/70 hover:shadow transition"
                             onclick="document.getElementById('dependencyPath').value='';">
                             Clear
                         </button>
@@ -121,7 +111,8 @@
         </section>
 
         <!-- Results table -->
-        <section id="results" class="hidden rounded-lg border border-gray-200 p-6 mb-10">
+        <section id="results" class="hidden relative rounded-lg border border-gray-200 p-6 mb-10">
+            <button id="clearResultsBtn" type="button" class="absolute top-4 right-4 bg-white/70 hover:bg-white text-gray-600 rounded-full px-3 py-1 font-instrument-serif shadow border border-gray-200 transition text-base" title="Clear results">Clear</button>
             <h2 id="resultsTitle" class="font-instrument-serif text-xl font-semibold text-gray-900 mb-4">Results:</h2>
             <div id="resultsContent" class="space-y-4">
             </div>
@@ -211,8 +202,25 @@
                 return;
             }
 
-            // Update Results title with count
-            document.getElementById('resultsTitle').innerHTML = `Results <span class="text-red-600 font-normal text-lg ml-2">Found ${updates.length} outdated package(s).</span>`;
+            // Extract owner/repo from the global repoUrl
+            let repoUrl = repoUrlGlobal || document.getElementById('repoUrl').value.trim();
+            let ownerRepo = '';
+            let owner = '', repo = '';
+            try {
+                const match = repoUrl.match(/github\.com\/(.+?)\/(.+?)(?:$|\/|\?|#)/);
+                if (match) {
+                    ownerRepo = `${match[1]}/${match[2]}`;
+                    owner = match[1];
+                    repo = match[2];
+                }
+            } catch {}
+
+            // Update Results title with count and repo info
+            document.getElementById('resultsTitle').innerHTML = `Results <span class="text-red-600 font-normal text-lg ml-2">Found ${updates.length} outdated package(s).</span>` +
+                (owner && repo ? `<div class='font-instrument-serif text-2xl text-gray-800 mt-4 flex flex-row justify-center gap-x-8 text-center'>
+                    <span><span class="text-gray-500 text-lg font-normal mr-2">Owner:</span> <span class="font-bold">${owner}</span></span>
+                    <span><span class="text-gray-500 text-lg font-normal mr-2">Repo:</span> <span class="font-bold">${repo}</span></span>
+                </div>` : '');
 
             // Create table html
             const tableBody = updates.map(u => `
@@ -256,6 +264,16 @@
             status.classList.add('hidden'); // Keep status hidden until PR button is clicked
 
             document.getElementById('createPrBtn').addEventListener('click', startPrFlow);
+
+            // Attach clear button event
+            setTimeout(() => {
+                const clearBtn = document.getElementById('clearResultsBtn');
+                if (clearBtn) {
+                    clearBtn.onclick = () => {
+                        results.classList.add('hidden');
+                    };
+                }
+            }, 0);
         }
 
         async function startPrFlow() {
