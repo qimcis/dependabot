@@ -100,7 +100,7 @@ deactivate
 
 1. Start the web server:
    ```bash
-   python src/web/app.py
+   python -m src.web.app
    ```
 
 2. Open your browser and navigate to `http://localhost:5000`
