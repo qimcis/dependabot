@@ -65,6 +65,9 @@
 
         <!-- Action Card -->
         <section class="max-w-5xl w-full mx-auto rounded-lg border border-gray-200 p-4 sm:p-8 mb-8 sm:mb-12">
+            <div class="mb-4">
+                <span class="font-instrument-serif text-2xl text-gray-900">Repository</span>
+            </div>
             <form id="checkForm" class="space-y-6">
                 <div>
                     <label for="repoUrl" class="block text-sm font-medium text-gray-700 mb-1">GitHub Repository URL</label>
@@ -237,9 +240,13 @@
 
             // Update Results title with count and repo info
             document.getElementById('resultsTitle').innerHTML = `Results <span class="text-red-600 font-normal text-lg ml-2">Found ${updates.length} outdated package(s).</span>` +
-                (owner && repo ? `<div class='font-instrument-serif text-2xl text-gray-800 mt-4 flex flex-row justify-center gap-x-8 text-center'>
-                    <span><span class="text-gray-500 text-lg font-normal mr-2">Owner:</span> <span class="font-bold">${owner}</span></span>
-                    <span><span class="text-gray-500 text-lg font-normal mr-2">Repo:</span> <span class="font-bold">${repo}</span></span>
+                (owner && repo ? `<div class='font-instrument-serif text-2xl text-gray-800 mt-4 flex flex-row justify-center items-center gap-x-12'>
+                    <span><span class=\"text-gray-500 text-lg font-normal mr-2\">Owner:</span> <span class=\"font-bold\">${owner}</span></span>
+                    <span><span class=\"text-gray-500 text-lg font-normal mr-2\">Repo:</span> <span class=\"font-bold\">${repo}</span></span>
+                    <a href='https://github.com/${owner}/${repo}' target='_blank' rel='noopener noreferrer' class='flex items-center text-blue-600 hover:underline font-normal text-lg'>
+                        <svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='currentColor' class='w-6 h-6 mr-2'><path d='M12 2C6.477 2 2 6.484 2 12.021c0 4.428 2.865 8.184 6.839 9.504.5.092.682-.217.682-.483 0-.237-.009-.868-.014-1.703-2.782.605-3.369-1.342-3.369-1.342-.454-1.157-1.11-1.465-1.11-1.465-.908-.62.069-.608.069-.608 1.004.07 1.532 1.032 1.532 1.032.892 1.53 2.341 1.088 2.91.832.091-.647.35-1.088.636-1.339-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.987 1.029-2.686-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.025A9.564 9.564 0 0 1 12 6.844c.85.004 1.705.115 2.504.337 1.909-1.295 2.748-1.025 2.748-1.025.546 1.378.202 2.397.1 2.65.64.699 1.028 1.593 1.028 2.686 0 3.847-2.338 4.695-4.566 4.944.359.309.678.919.678 1.852 0 1.336-.012 2.417-.012 2.747 0 .268.18.579.688.481C19.138 20.203 22 16.447 22 12.021 22 6.484 17.523 2 12 2Z'/></svg>
+                        View on GitHub
+                    </a>
                 </div>` : '');
 
             // Create table html
