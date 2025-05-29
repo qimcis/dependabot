@@ -24,6 +24,11 @@ This script is a command-line tool to help manage and update your Python and Nod
     -   Creates a new branch in the target repository.
     -   Commits the updated dependency file (`requirements.txt` or `package.json`).
     -   Opens a Pull Request with the proposed changes.
+-   **Web Interface:**
+    -   Modern, user-friendly web interface for checking and updating dependencies.
+    -   Real-time status updates and progress tracking.
+    -   Beautiful table display of available updates.
+    -   Direct links to created Pull Requests.
 -   **Caching:** Caches version information from PyPI/npm for a short period to speed up repeated checks.
 -   **Parallel Processing:** Uses thread pools for faster checking of multiple packages.
 
@@ -42,7 +47,7 @@ This script is a command-line tool to help manage and update your Python and Nod
 
 2.  **Install required Python libraries:**
     ```bash
-    pip install click rich packaging requests PyGithub importlib-metadata
+    pip install click rich packaging requests PyGithub importlib-metadata flask
     ```
     (`importlib-metadata` is generally included with Python 3.8+ but good to list for older versions or specific environments).
 
@@ -75,9 +80,13 @@ pip install -r requirements.txt
 
 ### 5. Run the tool
 ```sh
+# CLI mode
 python src/main.py ...
 # or
 python -m src.main ...
+
+# Web interface mode
+python src/web/app.py
 ```
 
 When finished, you can deactivate the environment with:
@@ -86,6 +95,29 @@ deactivate
 ```
 
 ## How to Use
+
+### Web Interface
+
+1. Start the web server:
+   ```bash
+   python src/web/app.py
+   ```
+
+2. Open your browser and navigate to `http://localhost:5000`
+
+3. Enter a GitHub repository URL and optionally specify a dependency file path
+
+4. Click "Check Dependencies" and wait for the results
+
+5. If updates are found, a Pull Request will be created automatically
+
+The web interface provides:
+- Real-time status updates
+- A clean table view of available updates
+- Direct links to created Pull Requests
+- Error handling and user feedback
+
+### Command Line Interface
 
 The script is run from the command line using `python src/main.py` followed by a command.
 

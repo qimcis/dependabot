@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dependabot Web Interface</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        .loading {
+            display: inline-block;
+            width: 1.5rem;
+            height: 1.5rem;
+            border: 3px solid rgba(255,255,255,.3);
+            border-radius: 50%;
+            border-top-color: #fff;
+            animation: spin 1s ease-in-out infinite;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+    <div class="max-w-4xl mx-auto px-4 py-8">
+        <header class="text-center mb-12">
+            <h1 class="text-4xl font-bold text-gray-900 mb-4">Dependabot Web Interface</h1>
+            <p class="text-lg text-gray-600">Check and update dependencies in your GitHub repositories</p>
+        </header>
+
+        <div class="bg-white rounded-lg shadow-lg p-6 mb-8">
+            <form id="checkForm" class="space-y-4">
+                <div>
+                    <label for="repoUrl" class="block text-sm font-medium text-gray-700 mb-1">GitHub Repository URL</label>
+                    <input type="url" id="repoUrl" name="repoUrl" required
+                        class="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        placeholder="https://github.com/username/repo">
+                </div>
+                <div>
+                    <label for="dependencyPath" class="block text-sm font-medium text-gray-700 mb-1">Dependency File Path (Optional)</label>
+                    <input type="text" id="dependencyPath" name="dependencyPath"
+                        class="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        placeholder="e.g., backend/requirements.txt">
+                </div>
+                <button type="submit"
+                    class="w-full bg-blue-600 text-white px-6 py-3 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors">
+                    Check Dependencies
+                </button>
+            </form>
+        </div>
+
+        <div id="status" class="hidden bg-white rounded-lg shadow-lg p-6 mb-8">
+            <h2 class="text-xl font-semibold text-gray-900 mb-4">Status</h2>
+            <div id="statusContent" class="space-y-4">
+                <!-- Status content will be inserted here -->
+            </div>
+        </div>
+
+        <div id="results" class="hidden bg-white rounded-lg shadow-lg p-6">
+            <h2 class="text-xl font-semibold text-gray-900 mb-4">Results</h2>
+            <div id="resultsContent" class="space-y-4">
+                <!-- Results content will be inserted here -->
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const form = document.getElementById('checkForm');
+        const status = document.getElementById('status');
+        const statusContent = document.getElementById('statusContent');
+        const results = document.getElementById('results');
+        const resultsContent = document.getElementById('resultsContent');
+        let currentJobId = null;
+        let statusCheckInterval = null;
+
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const repoUrl = document.getElementById('repoUrl').value;
+            const dependencyPath = document.getElementById('dependencyPath').value;
+
+            // Reset UI
+            status.classList.remove('hidden');
+            results.classList.add('hidden');
+            statusContent.innerHTML = `
+                <div class="flex items-center space-x-2">
+                    <div class="loading"></div>
+                    <span class="text-gray-700">Initializing...</span>
+                </div>
+            `;
+
+            try {
+                const response = await fetch('/check', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        repo_url: repoUrl,
+                        dependency_file_path: dependencyPath || undefined
+                    })
+                });
+
+                const data = await response.json();
+                if (data.error) {
+                    throw new Error(data.error);
+                }
+
+                currentJobId = data.job_id;
+                startStatusCheck();
+            } catch (error) {
+                statusContent.innerHTML = `
+                    <div class="text-red-600">
+                        Error: ${error.message}
+                    </div>
+                `;
+            }
+        });
+
+        function startStatusCheck() {
+            if (statusCheckInterval) {
+                clearInterval(statusCheckInterval);
+            }
+
+            statusCheckInterval = setInterval(async () => {
+                try {
+                    const response = await fetch(`/status/${currentJobId}`);
+                    const data = await response.json();
+
+                    if (data.error) {
+                        throw new Error(data.error);
+                    }
+
+                    updateStatus(data);
+
+                    if (data.status === 'completed' || data.status === 'error') {
+                        clearInterval(statusCheckInterval);
+                    }
+                } catch (error) {
+                    statusContent.innerHTML = `
+                        <div class="text-red-600">
+                            Error checking status: ${error.message}
+                        </div>
+                    `;
+                    clearInterval(statusCheckInterval);
+                }
+            }, 1000);
+        }
+
+        function updateStatus(data) {
+            let statusHtml = '';
+            let resultsHtml = '';
+
+            switch (data.status) {
+                case 'queued':
+                    statusHtml = `
+                        <div class="flex items-center space-x-2">
+                            <div class="loading"></div>
+                            <span class="text-gray-700">Queued for processing...</span>
+                        </div>
+                    `;
+                    break;
+
+                case 'processing':
+                    statusHtml = `
+                        <div class="flex items-center space-x-2">
+                            <div class="loading"></div>
+                            <span class="text-gray-700">${data.message}</span>
+                        </div>
+                    `;
+                    break;
+
+                case 'completed':
+                    statusHtml = `
+                        <div class="text-green-600">
+                            ${data.message}
+                        </div>
+                    `;
+                    if (data.pr_url) {
+                        statusHtml += `
+                            <div class="mt-2">
+                                <a href="${data.pr_url}" target="_blank" 
+                                   class="text-blue-600 hover:text-blue-800 underline">
+                                    View Pull Request
+                                </a>
+                            </div>
+                        `;
+                    }
+                    if (data.updates && data.updates.length > 0) {
+                        results.classList.remove('hidden');
+                        resultsHtml = `
+                            <div class="overflow-x-auto">
+                                <table class="min-w-full divide-y divide-gray-200">
+                                    <thead class="bg-gray-50">
+                                        <tr>
+                                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Package</th>
+                                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Current Version</th>
+                                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Latest Version</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="bg-white divide-y divide-gray-200">
+                                        ${data.updates.map(update => `
+                                            <tr>
+                                                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${update.package}</td>
+                                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${update.current}</td>
+                                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${update.latest}</td>
+                                            </tr>
+                                        `).join('')}
+                                    </tbody>
+                                </table>
+                            </div>
+                        `;
+                    }
+                    break;
+
+                case 'error':
+                    statusHtml = `
+                        <div class="text-red-600">
+                            ${data.message}
+                        </div>
+                    `;
+                    if (data.updates && data.updates.length > 0) {
+                        results.classList.remove('hidden');
+                        resultsHtml = `
+                            <div class="text-yellow-600 mb-4">
+                                Updates were found but could not be applied:
+                            </div>
+                            <div class="overflow-x-auto">
+                                <table class="min-w-full divide-y divide-gray-200">
+                                    <thead class="bg-gray-50">
+                                        <tr>
+                                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Package</th>
+                                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Current Version</th>
+                                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Latest Version</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="bg-white divide-y divide-gray-200">
+                                        ${data.updates.map(update => `
+                                            <tr>
+                                                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${update.package}</td>
+                                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${update.current}</td>
+                                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${update.latest}</td>
+                                            </tr>
+                                        `).join('')}
+                                    </tbody>
+                                </table>
+                            </div>
+                        `;
+                    }
+                    break;
+            }
+
+            statusContent.innerHTML = statusHtml;
+            if (resultsHtml) {
+                resultsContent.innerHTML = resultsHtml;
+            }
+        }
+    </script>
+</body>
+</html> 
