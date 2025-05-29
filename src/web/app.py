@@ -15,6 +15,8 @@ from ..main import (
     GITHUB_OAUTH_SCOPES,
     GITHUB_DEVICE_CODE_URL,
     GITHUB_ACCESS_TOKEN_URL,
+    PR_TITLE,
+    PR_BODY_TEMPLATE,
 )
 
 app = Flask(__name__)
@@ -189,6 +191,16 @@ def start_pr():
     if not updates:
         return jsonify({"error": "No updates found."}), 400
 
+    # Prepare PR preview info
+    update_details_md = "\n".join([
+        f"| `{p}` | `{c}` | `{l}` |" for p, c, l in updates
+    ])
+    default_pr_title = PR_TITLE
+    default_pr_body = PR_BODY_TEMPLATE.format(update_details=update_details_md)
+    diff_preview = [
+        {"package": p, "current": c, "latest": l} for p, c, l in updates
+    ]
+
     # Start GitHub device flow
     try:
         resp = requests.post(
@@ -222,6 +234,9 @@ def start_pr():
         "message": "Waiting for user authorization…",
         "interval": interval,
         "expires_at": time.time() + expires_in,
+        "default_pr_title": default_pr_title,
+        "default_pr_body": default_pr_body,
+        "diff_preview": diff_preview,
     }
 
     # Spawn background thread
@@ -234,6 +249,9 @@ def start_pr():
             "user_code": user_code,
             "verification_uri": verification_uri,
             "expires_in": expires_in,
+            "default_pr_title": default_pr_title,
+            "default_pr_body": default_pr_body,
+            "diff_preview": diff_preview,
         }
     )
 
@@ -244,6 +262,45 @@ def pr_status(device_code: str):
     if not flow:
         return jsonify({"error": "Unknown device code."}), 404
     return jsonify(flow)
+
+
+@app.route("/submit_pr", methods=["POST"])
+def submit_pr():
+    data = request.get_json() or {}
+    device_code = data.get("device_code")
+    pr_title = data.get("pr_title")
+    pr_body = data.get("pr_body")
+    if not device_code or not pr_title or not pr_body:
+        return jsonify({"error": "Missing required fields."}), 400
+    flow = oauth_flows.get(device_code)
+    if not flow:
+        return jsonify({"error": "Unknown device code."}), 400
+    access_token = flow.get("access_token")
+    if not access_token:
+        return jsonify({"error": "Not authorized yet."}), 400
+    # Use the latest updates and info from the flow
+    updates = flow["updates"]
+    dep_type = flow["dep_type"]
+    dep_file_path = flow["dep_file_path"]
+    repo_url = flow["repo_url"]
+    # Fetch original file content
+    original_content = fetch_original_file_content(repo_url, dep_file_path)
+    if original_content is None:
+        return jsonify({"error": "Could not fetch dependency file."}), 400
+    pr_url = create_github_pr(
+        repo_url,
+        dep_file_path,
+        dep_type,
+        original_content,
+        updates,
+        access_token,
+        pr_title,
+        pr_body,
+    )
+    if pr_url:
+        return jsonify({"pr_url": pr_url})
+    else:
+        return jsonify({"error": "Failed to create pull request."}), 500
 
 
 if __name__ == "__main__":

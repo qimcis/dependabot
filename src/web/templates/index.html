@@ -295,9 +295,9 @@
         }
 
         async function startPrFlow() {
-            // Results are already visible. Now show status for OAuth.
+            // Show loading while fetching PR preview info
             status.classList.remove('hidden');
-            statusContent.innerHTML = loadingHtml('Initiating OAuth flow...');
+            statusContent.innerHTML = loadingHtml('Preparing pull request preview...');
             try {
                 const res = await fetch('/start_pr', {
                     method: 'POST',
@@ -310,61 +310,76 @@
                 const data = await res.json();
                 if (data.error) throw new Error(data.error);
 
+                // Show PR customization form inside statusContent
+                showPrInlineForm(data);
                 deviceCodeGlobal = data.device_code;
-                showAuthInstructions(data);
-                beginPollingPrStatus();
+                window._prInlineDeviceCode = data.device_code;
             } catch (err) {
                 statusContent.innerHTML = errorHtml(`Error: ${err.message}`);
             }
         }
 
-        function showAuthInstructions(data) {
+        // PR Inline Form logic
+        function showPrInlineForm(data) {
+            status.classList.remove('hidden');
+            let diffTable = '';
+            if (data.diff_preview && data.diff_preview.length > 0) {
+                diffTable = `<table class='min-w-full text-left'><thead><tr><th class='pr-4'>Package</th><th class='pr-4'>Current</th><th class='pr-4'>Latest</th></tr></thead><tbody>`;
+                for (const row of data.diff_preview) {
+                    diffTable += `<tr><td class='pr-4'>${row.package}</td><td class='pr-4 text-yellow-700'>${row.current}</td><td class='pr-4 text-red-700'>${row.latest}</td></tr>`;
+                }
+                diffTable += '</tbody></table>';
+            } else {
+                diffTable = '<span class="text-gray-500">No dependency changes detected.</span>';
+            }
             statusContent.innerHTML = `
-                <div class="text-gray-700 mb-2">1. Open the link below in a new tab and sign in to GitHub:</div>
-                <div class="mb-4"><a href="${data.verification_uri}" target="_blank" class="text-blue-600 underline break-all">${data.verification_uri}</a></div>
-                <div class="text-gray-700 mb-2">2. Enter the following code:</div>
-                <div class="text-xl font-bold font-instrument-serif">${data.user_code}</div>
-                <div class="mt-4 text-gray-600">Waiting for authorization...</div>
+                <h3 class="font-instrument-serif text-2xl mb-4 text-gray-900">Customize Pull Request</h3>
+                <form id="prForm" class="space-y-4">
+                  <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">PR Title</label>
+                    <input id="prTitleInput" type="text" class="w-full border border-gray-300 rounded-md px-3 py-2 font-instrument-serif" required value="${data.default_pr_title || ''}" />
+                  </div>
+                  <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">PR Message</label>
+                    <textarea id="prBodyInput" rows="5" class="w-full border border-gray-300 rounded-md px-3 py-2 font-instrument-serif" required>${data.default_pr_body || ''}</textarea>
+                  </div>
+                  <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Dependency Updates Preview</label>
+                    <div id="prDiffPreview" class="overflow-x-auto text-sm font-mono bg-gray-50 rounded p-2 border border-gray-200">${diffTable}</div>
+                  </div>
+                  <div class="flex justify-end gap-2 mt-4">
+                    <button type="button" id="cancelPrBtn" class="px-4 py-2 rounded-md border border-gray-300 bg-white text-gray-700 hover:bg-gray-100 font-medium">Cancel</button>
+                    <button type="submit" id="submitPrBtn" class="px-6 py-2 rounded-md bg-blue-600 text-white font-instrument-serif hover:bg-blue-700 transition">Submit PR</button>
+                  </div>
+                  <div id="prModalStatus" class="mt-2 text-center"></div>
+                </form>
             `;
-        }
-
-        function beginPollingPrStatus() {
-            if (prStatusInterval) clearInterval(prStatusInterval);
-            prStatusInterval = setInterval(async () => {
+            document.getElementById('cancelPrBtn').onclick = function() {
+                status.classList.add('hidden');
+            };
+            document.getElementById('prForm').onsubmit = async function(e) {
+                e.preventDefault();
+                const prTitle = document.getElementById('prTitleInput').value;
+                const prBody = document.getElementById('prBodyInput').value;
+                const prModalStatus = document.getElementById('prModalStatus');
+                prModalStatus.textContent = 'Submitting pull request...';
                 try {
-                    const res = await fetch(`/pr_status/${deviceCodeGlobal}`);
+                    const res = await fetch('/submit_pr', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            device_code: window._prInlineDeviceCode,
+                            pr_title: prTitle,
+                            pr_body: prBody
+                        })
+                    });
                     const data = await res.json();
                     if (data.error) throw new Error(data.error);
-
-                    switch (data.status) {
-                        case 'waiting_for_user':
-                            // still waiting
-                            break;
-                        case 'authorized':
-                            statusContent.innerHTML = loadingHtml(data.message);
-                            break;
-                        case 'completed':
-                            clearInterval(prStatusInterval);
-                            statusContent.innerHTML = `
-                                <p class="text-green-600 text-lg font-medium">${data.message}</p>
-                                <div class="mt-4">
-                                    <a href="${data.pr_url}" target="_blank"
-                                       class="text-blue-600 hover:text-blue-700 underline text-lg">
-                                        View Pull Request
-                                    </a>
-                                </div>
-                            `;
-                            break;
-                        case 'error':
-                            clearInterval(prStatusInterval);
-                            statusContent.innerHTML = errorHtml(data.message);
-                            break;
-                    }
+                    prModalStatus.innerHTML = `<span class='text-green-700'>Pull request created! <a href='${data.pr_url}' target='_blank' class='text-blue-600 underline'>View PR</a></span>`;
                 } catch (err) {
-                    clearInterval(prStatusInterval);
-                    statusContent.innerHTML = errorHtml(`Status error: ${err.message}`);
+                    prModalStatus.innerHTML = `<span class='text-red-600'>Error: ${err.message}</span>`;
                 }
-            }, 5000);
+            };
         }
 
         // Clear state on results clear
