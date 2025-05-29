@@ -84,7 +84,7 @@
                             placeholder="https://github.com/username/repo">
                         <button type="button"
                             class="bg-white/40 text-gray-600 rounded-md px-4 py-2 font-instrument-serif hover:bg-white/70 hover:shadow transition"
-                            onclick="document.getElementById('repoUrl').value='';">
+                            onclick="document.getElementById('repoUrl').value=''; localStorage.removeItem('repoUrl');">
                             Clear
                         </button>
                     </div>
@@ -98,7 +98,7 @@
                             placeholder="e.g., backend/requirements.txt">
                         <button type="button"
                             class="bg-white/40 text-gray-600 rounded-md px-4 py-2 font-instrument-serif hover:bg-white/70 hover:shadow transition"
-                            onclick="document.getElementById('dependencyPath').value='';">
+                            onclick="document.getElementById('dependencyPath').value=''; localStorage.removeItem('dependencyPath');">
                             Clear
                         </button>
                     </div>
@@ -119,9 +119,12 @@
         </section>
 
         <!-- Status panel -->
-        <section id="status" class="hidden rounded-lg border border-gray-200 p-6 mb-10 text-center">
-            <div id="statusContent" class="space-y-4">
+        <section id="status" class="hidden relative rounded-lg border border-gray-200 p-6 mb-10">
+            <div class="flex flex-row items-start mb-6">
+                <h2 class="font-instrument-serif text-2xl font-semibold text-gray-900">Pull Request</h2>
+                <button id="clearStatusBtn" type="button" class="ml-auto bg-white/70 hover:bg-white text-gray-600 rounded-full px-3 py-1 font-instrument-serif shadow border border-gray-200 transition text-base" title="Clear status">Clear</button>
             </div>
+            <div id="statusContent" class="space-y-4 text-center"></div>
         </section>
     </main>
 
@@ -157,6 +160,22 @@
         let dependencyPathGlobal = '';
         let deviceCodeGlobal = '';
         let prStatusInterval = null;
+
+        // --- State Persistence ---
+        // Restore on load and set up listeners after DOM is ready
+        document.addEventListener('DOMContentLoaded', () => {
+            const repoUrlInput = document.getElementById('repoUrl');
+            const dependencyPathInput = document.getElementById('dependencyPath');
+            if (localStorage.getItem('repoUrl')) repoUrlInput.value = localStorage.getItem('repoUrl');
+            if (localStorage.getItem('dependencyPath')) dependencyPathInput.value = localStorage.getItem('dependencyPath');
+            if (localStorage.getItem('resultsHtml')) {
+                resultsContent.innerHTML = localStorage.getItem('resultsHtml');
+                results.classList.remove('hidden');
+            }
+            // Save on input
+            repoUrlInput.addEventListener('input', e => localStorage.setItem('repoUrl', e.target.value));
+            dependencyPathInput.addEventListener('input', e => localStorage.setItem('dependencyPath', e.target.value));
+        });
 
         // Event handlers
         form.addEventListener('submit', async (e) => {
@@ -199,6 +218,7 @@
                 resultsContent.innerHTML = '<div class="text-green-600 p-4">All dependencies are up to date!</div>';
                 results.classList.remove('hidden');
                 status.classList.add('hidden'); 
+                localStorage.setItem('resultsHtml', resultsContent.innerHTML);
                 return;
             }
 
@@ -262,18 +282,9 @@
             `;
             results.classList.remove('hidden');
             status.classList.add('hidden'); // Keep status hidden until PR button is clicked
+            localStorage.setItem('resultsHtml', resultsContent.innerHTML);
 
             document.getElementById('createPrBtn').addEventListener('click', startPrFlow);
-
-            // Attach clear button event
-            setTimeout(() => {
-                const clearBtn = document.getElementById('clearResultsBtn');
-                if (clearBtn) {
-                    clearBtn.onclick = () => {
-                        results.classList.add('hidden');
-                    };
-                }
-            }, 0);
         }
 
         async function startPrFlow() {
@@ -348,6 +359,35 @@
                 }
             }, 5000);
         }
+
+        // Clear state on results clear
+        document.addEventListener('DOMContentLoaded', () => {
+            const clearBtn = document.getElementById('clearResultsBtn');
+            if (clearBtn) {
+                clearBtn.onclick = () => {
+                    results.classList.add('hidden');
+                    localStorage.removeItem('resultsHtml');
+                };
+            }
+        });
+
+        // Attach clear button event for status panel
+        document.addEventListener('DOMContentLoaded', () => {
+            const clearStatusBtn = document.getElementById('clearStatusBtn');
+            if (clearStatusBtn) {
+                clearStatusBtn.onclick = () => {
+                    status.classList.add('hidden');
+                };
+            }
+        });
+
+        // Final guarantee: restore input values after all scripts and DOM manipulations
+        window.addEventListener('load', () => {
+            const repoUrlInput = document.getElementById('repoUrl');
+            const dependencyPathInput = document.getElementById('dependencyPath');
+            if (localStorage.getItem('repoUrl')) repoUrlInput.value = localStorage.getItem('repoUrl');
+            if (localStorage.getItem('dependencyPath')) dependencyPathInput.value = localStorage.getItem('dependencyPath');
+        });
     </script>
 </body>
 </html> 
