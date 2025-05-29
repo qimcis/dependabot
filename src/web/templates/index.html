@@ -57,28 +57,30 @@
     </div>
     
     <!-- Main content container -->
-    <main class="max-w-2xl mx-auto px-4 py-10">
+    <main class="max-w-4xl mx-auto px-4 py-10">
         <header class="text-center mb-12">
             <h1 class="font-instrument-serif text-5xl font-semibold mb-4 tracking-tight">Dependabot</h1>
-            <p class="text-lg text-gray-700 max-w-2xl mx-auto">Scan your GitHub repositories, discover outdated dependencies and open pull requests to update them all from your web browser.</p>
+            <p class="font-instrument-serif text-lg text-gray-700 max-w-2xl mx-auto">Effortlessly scan your GitHub repositories, discover outdated dependencies and open pull requests &mdash; all from your browser.</p>
         </header>
 
         <!-- Action Card -->
-        <section class="rounded-lg border border-gray-200 p-8 mb-12">
+        <section class="max-w-5xl mx-auto rounded-lg border border-gray-200 p-8 mb-12">
             <form id="checkForm" class="space-y-6">
                 <div>
                     <label for="repoUrl" class="block text-sm font-medium text-gray-700 mb-1">GitHub Repository URL</label>
-                    <input type="url" id="repoUrl" name="repoUrl" list="repo-suggestions" required
+                    <div class="flex flex-wrap gap-2 mb-3">
+                        <button type="button" class="bg-transparent border border-gray-300 text-gray-800 px-3 py-1 rounded-lg font-mono text-sm hover:bg-gray-100"
+                            onclick="document.getElementById('repoUrl').value='https://github.com/tailwindlabs/tailwindcss'">
+                            https://github.com/tailwindlabs/tailwindcss
+                        </button>
+                        <button type="button" class="bg-transparent border border-gray-300 text-gray-800 px-3 py-1 rounded-lg font-mono text-sm hover:bg-gray-100"
+                            onclick="document.getElementById('repoUrl').value='https://github.com/expressjs/express'">
+                            https://github.com/expressjs/express
+                        </button>
+                    </div>
+                    <input type="url" id="repoUrl" name="repoUrl" required
                         class="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                         placeholder="https://github.com/username/repo">
-                    <datalist id="repo-suggestions">
-                        <option value="https://github.com/vercel/next.js">
-                        <option value="https://github.com/facebook/react">
-                        <option value="https://github.com/tailwindlabs/tailwindcss">
-                        <option value="https://github.com/expressjs/express">
-                        <option value="https://github.com/nicholaschen09/nicholas-personal-website">
-                        <option value="https://github.com/qimcis/dependabot">
-                    </datalist>
                 </div>
                 <div>
                     <label for="dependencyPath" class="block text-sm font-medium text-gray-700 mb-1">Dependency File Path (Optional)</label>
@@ -87,7 +89,7 @@
                         placeholder="e.g., backend/requirements.txt">
                 </div>
                 <button type="submit"
-                    class="w-full px-6 py-3 rounded-full font-semibold text-white bg-gradient-to-b from-blue-200 via-blue-500 to-blue-300 shadow-lg hover:shadow-xl hover:scale-105 active:scale-95 transform transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-blue-300 focus:ring-opacity-75">
+                    class="w-full px-6 py-3 rounded-full font-instrument-serif text-xl text-white bg-gradient-to-b from-blue-200 via-blue-500 to-blue-300 shadow-lg hover:shadow-xl hover:scale-105 active:scale-95 transform transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-blue-300 focus:ring-opacity-75">
                     Check Dependencies
                 </button>
             </form>
@@ -218,7 +220,7 @@
                 </div>
                 <div class="mt-6 text-center">
                     <button id="createPrBtn"
-                            class="w-full px-6 py-3 rounded-full font-semibold text-white bg-gradient-to-b from-blue-200 via-blue-500 to-blue-300 shadow-lg hover:shadow-xl hover:scale-105 active:scale-95 transform transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-blue-300 focus:ring-opacity-75">
+                            class="w-full px-6 py-3 rounded-full font-instrument-serif text-xl text-white bg-gradient-to-b from-blue-200 via-blue-500 to-blue-300 shadow-lg hover:shadow-xl hover:scale-105 active:scale-95 transform transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-blue-300 focus:ring-opacity-75">
                         Make Pull Request
                     </button>
                 </div>
