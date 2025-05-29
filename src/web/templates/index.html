@@ -87,7 +87,7 @@
 
         <!-- Action Card -->
         <section class="max-w-5xl w-full mx-auto rounded-lg border border-gray-200 p-4 sm:p-8 mb-8 sm:mb-12">
-            <div id="repoQuickAccess" class="mb-4"></div>
+            <div id="repoQuickAccess" class="mb-4 relative"></div>
             <div class="mb-4">
                 <span class="font-instrument-serif text-2xl text-gray-900">Repository</span>
             </div>
@@ -274,17 +274,29 @@
                 return;
             }
             // Add search input
-            document.getElementById('resultsContentControls').innerHTML = `<input id="depSearchInput" type="text" placeholder="Search packages..." class="border border-gray-300 rounded px-2 py-1 font-instrument-serif text-sm w-full sm:w-64" />`;
+            document.getElementById('resultsContentControls').innerHTML = `
+              <div class="flex flex-row gap-2 items-center">
+                <input id="depSearchInput" type="text" placeholder="Search packages..." class="border border-gray-300 rounded px-2 py-1 font-instrument-serif text-sm w-full sm:w-64" />
+                <label class="inline-flex items-center ml-2 font-instrument-serif text-sm">
+                  <input type="checkbox" id="devDepsToggle" class="form-checkbox mr-1" checked /> Show dev dependencies
+                </label>
+              </div>
+            `;
             let searchVal = '';
             let filtered = updates;
+            let showDevDeps = true;
             const renderTable = () => {
                 searchVal = (document.getElementById('depSearchInput')?.value || '').toLowerCase();
-                filtered = updates.filter(u => u.package.toLowerCase().includes(searchVal));
+                showDevDeps = document.getElementById('devDepsToggle')?.checked;
+                filtered = updates.filter(u => {
+                    if (!showDevDeps && u.dev) return false;
+                    return u.package.toLowerCase().includes(searchVal);
+                });
                 const tableBody = filtered.map(u => `
                     <tr>
                         <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                             <a href="https://www.npmjs.com/package/${u.package}" target="_blank" rel="noopener noreferrer" class="text-blue-500 hover:underline">
-                                ${u.package}
+                                ${u.package}${u.dev ? ' <span class=\'text-xs text-gray-400\'>(dev)</span>' : ''}
                             </a>
                         </td>
                         <td class="px-6 py-4 whitespace-nowrap text-sm ${u.current !== u.latest ? 'bg-yellow-50 text-yellow-800 font-semibold' : 'text-gray-500'}">
@@ -320,6 +332,7 @@
             };
             renderTable();
             document.getElementById('depSearchInput').oninput = renderTable;
+            document.getElementById('devDepsToggle').onchange = renderTable;
             results.classList.remove('hidden');
             status.classList.add('hidden');
             localStorage.setItem('resultsHtml', resultsContent.innerHTML);
@@ -529,6 +542,10 @@
           const stars = getStarredRepos();
           const recents = getRecentRepos().filter(r => !stars.includes(r));
           let html = '';
+          // Only show Clear Recents button if there are recents
+          if (recents.length) {
+            html += `<button id='clearRecentsBtn' title='Clear recent repositories' class='absolute top-0 right-0 px-3 py-1 text-xs font-instrument-serif text-gray-400 hover:text-red-500 border border-gray-200 rounded-full bg-white/80 shadow-sm transition'>Clear Recents</button>`;
+          }
           if (stars.length) {
             html += `<div class='mb-2'><span class='font-instrument-serif text-base text-gray-700 mr-2'>Starred:</span>`;
             html += stars.map(url => `
@@ -563,6 +580,14 @@
               toggleStarRepo(el.dataset.url);
             };
           });
+          // Clear recents handler
+          const clearBtn = document.getElementById('clearRecentsBtn');
+          if (clearBtn) {
+            clearBtn.onclick = () => {
+              setRecentRepos([]);
+              renderRepoQuickAccess();
+            };
+          }
         }
 
         // On repo check, add to recent
