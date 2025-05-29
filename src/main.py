@@ -674,23 +674,18 @@ def check_and_update(source: Optional[str], update: bool, dependency_file_path_o
 def propose_updates_command(repo_url: str, dependency_file_path_override: Optional[str]):
     """
     Checks a GitHub repository for outdated dependencies and proposes a PR with updates
-    using GitHub OAuth Device Flow for authorization.
+    using a GitHub Personal Access Token (PAT) for authorization.
     Use --dfp if the dependency file is not in the repository root.
     """
     if not PYGITHUB_AVAILABLE:
         console.print("[red]PyGithub library is not installed. Cannot create PR. Please run: pip install PyGithub[/red]")
         return
-    
-    if GITHUB_OAUTH_CLIENT_ID == "YOUR_GITHUB_OAUTH_CLIENT_ID":
-        console.print("[bold red]OAuth Client ID is not configured in the script.[/bold red]")
-        console.print("Please register an OAuth App on GitHub and set the GITHUB_OAUTH_CLIENT_ID in the script.")
-        return
 
     console.print(f"[cyan]Starting update proposal for repository: {repo_url}[/cyan]")
     
-    oauth_token = get_github_oauth_token() 
+    oauth_token = os.environ.get('GITHUB_TOKEN')
     if not oauth_token:
-        console.print("[red]Failed to obtain GitHub OAuth token. Aborting.[/red]")
+        console.print("[red]GitHub token not set in environment variable GITHUB_TOKEN. Aborting.[/red]")
         return
 
     updates, dep_type, dep_file_path = check_updates_parallel(repo_url, dependency_file_path_override)

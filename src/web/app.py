@@ -28,12 +28,12 @@ def process_repository(job_id: str, repo_url: str, dependency_file_path: Optiona
             "message": "Checking repository for updates..."
         })
 
-        # Get OAuth token
-        oauth_token = get_github_oauth_token()
+        # Use PAT from environment variable
+        oauth_token = os.environ.get('GITHUB_TOKEN')
         if not oauth_token:
             job_status[job_id].update({
                 "status": "error",
-                "message": "Failed to obtain GitHub OAuth token"
+                "message": "GitHub token not set in environment variable GITHUB_TOKEN"
             })
             return
 
