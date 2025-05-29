@@ -3,12 +3,20 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dependabot Web Interface</title>
+    <title>Dependabot Web</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Instrument+Serif&display=swap" rel="stylesheet">
     <style>
         body {
             font-family: 'Inter', sans-serif;
+            background-image: url('/static/Background.png');
+            background-size: 120%;
+            background-position: center;
+            background-repeat: no-repeat;
+            background-attachment: fixed;
+        }
+        .font-instrument-serif {
+            font-family: 'Instrument Serif', serif;
         }
         .loading {
             display: inline-block;
@@ -24,15 +32,23 @@
         }
     </style>
 </head>
-<body class="bg-gray-50 min-h-screen">
-    <div class="max-w-4xl mx-auto px-4 py-8">
+<body class="text-gray-900">
+
+    <!-- Subtle notification banner -->
+    <div class="font-instrument-serif text-center text-s bg-blue-50 bg-opacity-30 text-gray-700 border-b border-blue-100 py-2 px-4">
+        <span class="font-medium text-blue-600">New!</span> GitHub OAuth device-flow support has landed &mdash; create PRs without storing personal tokens.
+    </div>
+    
+    <!-- Main content container -->
+    <main class="max-w-2xl mx-auto px-4 py-10">
         <header class="text-center mb-12">
-            <h1 class="text-4xl font-bold text-gray-900 mb-4">Dependabot Web Interface</h1>
-            <p class="text-lg text-gray-600">Check and update dependencies in your GitHub repositories</p>
+            <h1 class="font-instrument-serif text-5xl font-semibold mb-4 tracking-tight">Dependabot Web</h1>
+            <p class="text-lg text-gray-700 max-w-2xl mx-auto">Effortlessly scan your GitHub repositories, discover outdated dependencies and open pull requests &mdash; all from your browser.</p>
         </header>
 
-        <div class="bg-white rounded-lg shadow-lg p-6 mb-8">
-            <form id="checkForm" class="space-y-4">
+        <!-- Action Card -->
+        <section class="rounded-lg border border-gray-200 p-8 mb-12">
+            <form id="checkForm" class="space-y-6">
                 <div>
                     <label for="repoUrl" class="block text-sm font-medium text-gray-700 mb-1">GitHub Repository URL</label>
                     <input type="url" id="repoUrl" name="repoUrl" required
@@ -46,24 +62,25 @@
                         placeholder="e.g., backend/requirements.txt">
                 </div>
                 <button type="submit"
-                    class="w-full bg-blue-600 text-white px-6 py-3 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors">
+                    class="w-full px-6 py-3 rounded-full font-semibold text-white bg-gradient-to-b from-blue-200 via-blue-500 to-blue-300 shadow-lg hover:shadow-xl hover:scale-105 active:scale-95 transform transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-blue-300 focus:ring-opacity-75">
                     Check Dependencies
                 </button>
             </form>
-        </div>
+        </section>
 
-        <div id="status" class="hidden bg-white rounded-lg shadow-lg p-6 mb-8">
-            <h2 class="text-xl font-semibold text-gray-900 mb-4">Status</h2>
-            <div id="statusContent" class="space-y-4">
-            </div>
-        </div>
-
-        <div id="results" class="hidden bg-white rounded-lg shadow-lg p-6">
-            <h2 class="text-xl font-semibold text-gray-900 mb-4">Results</h2>
+        <!-- Results table -->
+        <section id="results" class="hidden rounded-lg border border-gray-200 p-6 mb-10">
+            <h2 id="resultsTitle" class="font-instrument-serif text-xl font-semibold text-gray-900 mb-4">Results:</h2>
             <div id="resultsContent" class="space-y-4">
             </div>
-        </div>
-    </div>
+        </section>
+
+        <!-- Status panel -->
+        <section id="status" class="hidden rounded-lg border border-gray-200 p-6 mb-10 text-center">
+            <div id="statusContent" class="space-y-4">
+            </div>
+        </section>
+    </main>
 
     <script>
         // Helper HTML snippets     
@@ -94,9 +111,15 @@
             repoUrlGlobal = document.getElementById('repoUrl').value.trim();
             dependencyPathGlobal = document.getElementById('dependencyPath').value.trim();
 
-            status.classList.remove('hidden');
-            results.classList.add('hidden');
-            statusContent.innerHTML = loadingHtml('Checking dependencies...');
+            // Clear previous state and show loading in results area or a dedicated loading spot if preferred
+            resultsContent.innerHTML = ''; // Clear previous results
+            results.classList.add('hidden'); // Hide results until populated
+            status.classList.add('hidden'); // Hide status until PR flow
+            // For loading, we can use a temporary element or put it in results/status if shown.
+            // Let's show loading in results for now, then replace.
+            results.classList.remove('hidden');
+            resultsContent.innerHTML = loadingHtml('Checking dependencies...');
+            document.getElementById('resultsTitle').innerHTML = 'Results'; // Reset results title
 
             try {
                 const res = await fetch('/check', {
@@ -119,9 +142,15 @@
         // UI helpers 
         function displayResults(updates) {
             if (!updates || updates.length === 0) {
-                statusContent.innerHTML = '<div class="text-green-600">All dependencies are up to date!</div>';
+                document.getElementById('resultsTitle').innerHTML = 'Results'; // Keep consistent title
+                resultsContent.innerHTML = '<div class="text-green-600 p-4">All dependencies are up to date!</div>';
+                results.classList.remove('hidden');
+                status.classList.add('hidden'); 
                 return;
             }
+
+            // Update Results title with count
+            document.getElementById('resultsTitle').innerHTML = `Results <span class="text-red-600 font-normal text-lg ml-2">Found ${updates.length} outdated package(s).</span>`;
 
             // Create table html
             const tableBody = updates.map(u => `
@@ -135,7 +164,7 @@
             resultsContent.innerHTML = `
                 <div class="overflow-x-auto">
                     <table class="min-w-full divide-y divide-gray-200">
-                        <thead class="bg-gray-50">
+                        <thead class="bg-gray-100">
                             <tr>
                                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Package</th>
                                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Current Version</th>
@@ -145,20 +174,22 @@
                         <tbody class="bg-white divide-y divide-gray-200">${tableBody}</tbody>
                     </table>
                 </div>
+                <div class="mt-6 text-center">
+                    <button id="createPrBtn"
+                            class="w-full px-6 py-3 rounded-full font-semibold text-white bg-gradient-to-b from-blue-200 via-blue-500 to-blue-300 shadow-lg hover:shadow-xl hover:scale-105 active:scale-95 transform transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-blue-300 focus:ring-opacity-75">
+                        Make Pull Request
+                    </button>
+                </div>
             `;
             results.classList.remove('hidden');
+            status.classList.add('hidden'); // Keep status hidden until PR button is clicked
 
-            // Add Make PR button
-            statusContent.innerHTML = `
-                <div class="text-blue-600 mb-4">Found ${updates.length} outdated package(s).</div>
-                <button id="createPrBtn" class="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500">
-                    Make Pull Request
-                </button>
-            `;
             document.getElementById('createPrBtn').addEventListener('click', startPrFlow);
         }
 
         async function startPrFlow() {
+            // Results are already visible. Now show status for OAuth.
+            status.classList.remove('hidden');
             statusContent.innerHTML = loadingHtml('Initiating OAuth flow...');
             try {
                 const res = await fetch('/start_pr', {
@@ -208,8 +239,13 @@
                         case 'completed':
                             clearInterval(prStatusInterval);
                             statusContent.innerHTML = `
-                                <div class="text-green-600 mb-2">${data.message}</div>
-                                <a href="${data.pr_url}" target="_blank" class="text-blue-600 underline">View Pull Request</a>
+                                <p class="text-green-600 text-lg font-medium">${data.message}</p>
+                                <div class="mt-4">
+                                    <a href="${data.pr_url}" target="_blank"
+                                       class="text-blue-600 hover:text-blue-700 underline text-lg">
+                                        View Pull Request
+                                    </a>
+                                </div>
                             `;
                             break;
                         case 'error':
