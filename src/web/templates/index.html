@@ -183,9 +183,14 @@
             const tableBody = updates.map(u => `
                 <tr>
                     <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                        <a href="https://www.npmjs.com/package/${u.package}" target="_blank" rel="noopener noreferrer" class="text-blue-500 hover:underline">${u.package}</a>
+                        <a href="https://www.npmjs.com/package/${u.package}" target="_blank" rel="noopener noreferrer" class="text-blue-500 hover:underline">
+                            ${u.package}
+                        </a>
                     </td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${u.current}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        ${u.current}
+                        ${u.current !== u.latest ? '<span title="Outdated" class="ml-1 text-red-500">&#8593;</span>' : ''}
+                    </td>
                     <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${u.latest}</td>
                 </tr>
             `).join('');
