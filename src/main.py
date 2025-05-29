@@ -388,27 +388,14 @@ def check_package_version(package_name: str, version_spec_from_req: str, dep_typ
     is_pinned_exact = False
 
     if dep_type == "npm":
-        # Handle 'latest' and major-only versions (e.g. ^22, ^19)
-        if version_spec_from_req == "latest":
-            parsed_spec_version_str = latest_version_str  # treat as always outdated
-            add_to_table = True
-        elif re.match(r"^[\^~]?(\d+)$", version_spec_from_req):
-            # e.g. ^22 or 22
-            parsed_spec_version_str = version_spec_from_req.lstrip("^~")
-            add_to_table = True if latest_version_str != parsed_spec_version_str else False
-        elif re.match(r"^[\^~]?(\d+\.\d+)$", version_spec_from_req):
-            # e.g. ^1.2 or 1.2
-            parsed_spec_version_str = version_spec_from_req.lstrip("^~")
-            add_to_table = True if latest_version_str != parsed_spec_version_str else False
-        else:
-            # Try to match full semver
-            match = re.match(r"[\^~]?([0-9]+\.[0-9]+\.[0-9]+.*)", version_spec_from_req)
-            if match:
-                parsed_spec_version_str = match.group(1)
-            elif version_spec_from_req and not any(c in version_spec_from_req for c in ('>', '<', '*', 'x', 'X', '||')):
-                # if it's just a number like "1.2.3" without range specifiers, treat as pinned
-                parsed_spec_version_str = version_spec_from_req
-                is_pinned_exact = True
+        match = re.match(r"[\^~]?([0-9]+\.[0-9]+\.[0-9]+.*)", version_spec_from_req)
+        if match:
+            parsed_spec_version_str = match.group(1)
+        elif version_spec_from_req and not any(c in version_spec_from_req for c in ('>', '<', '*', 'x', 'X', '||')):
+             # if it's just a number like "1.2.3" without range specifiers, treat as pinned
+            parsed_spec_version_str = version_spec_from_req
+            is_pinned_exact = True
+
 
     elif dep_type == "pip":
         if "==" in version_spec_from_req:
@@ -474,13 +461,12 @@ def update_package(package_name: str) -> bool:
         return False
 
 def generate_new_dependency_file_content(original_content: str, dep_type: str, updates_to_apply: List[Tuple[str, str, str]]) -> str:
-    """Generates new content for a dependency file with updated versions. Adds debug prints for troubleshooting."""
+    """Generates new content for a dependency file with updated versions."""
     if not updates_to_apply:
         return original_content
 
     new_content = original_content
     updates_map = {pkg_name: latest_version for pkg_name, _, latest_version in updates_to_apply}
-    print(f"[debug] Updates to apply: {updates_map}")
 
     if dep_type == "pip":
         lines = original_content.splitlines()
@@ -490,12 +476,16 @@ def generate_new_dependency_file_content(original_content: str, dep_type: str, u
             if not stripped_line or stripped_line.startswith("#"):
                 new_lines.append(line)
                 continue
+            
             match = re.match(r"^\s*([a-zA-Z0-9._-]+(?:\[[a-zA-Z0-9_,.-]+\])?)\s*([<>=!~]=?.*)?", stripped_line)
             if match:
                 package_name = match.group(1)
                 if package_name in updates_map:
+                    # Construct the new line with the updated version, preserving original formatting as much as possible
+                    # This is a simple replacement, might need refinement for complex version specifiers
+                    # or lines with comments at the end.
                     new_lines.append(f"{package_name}=={updates_map[package_name]}")
-                    print(f"[info] Updating {package_name} to {updates_map[package_name]} in pip file content")
+                    console.print(f"[info]Updating {package_name} to {updates_map[package_name]} in pip file content[/info]")
                     continue
             new_lines.append(line)
         new_content = "\n".join(new_lines)
@@ -507,14 +497,16 @@ def generate_new_dependency_file_content(original_content: str, dep_type: str, u
                 if section in data and isinstance(data[section], dict):
                     for pkg_name, latest_version in updates_map.items():
                         if pkg_name in data[section]:
-                            old_version = data[section][pkg_name]
-                            # Always update, regardless of version format
+                            # For NPM, we need to consider the original version specifier type (e.g., ^, ~)
+                            # This simple update just puts the latest version. More advanced logic could try to preserve prefix.
+                            # For now, we'll use a common practice like ^version.
                             data[section][pkg_name] = f"^{latest_version}"
-                            print(f"[info] Updating {pkg_name} from {old_version} to ^{latest_version} in npm file content")
-            new_content = json.dumps(data, indent=2)
+                            console.print(f"[info]Updating {pkg_name} to ^{latest_version} in npm file content[/info]")
+            new_content = json.dumps(data, indent=2) # Common indent for package.json
         except json.JSONDecodeError:
-            print("[red] Could not parse package.json to update versions. Original content kept. [red]")
+            console.print("[red]Could not parse package.json to update versions. Original content kept.[/red]")
             return original_content
+            
     return new_content
 
 def create_github_pr(repo_url: str, dependency_file_path: str, dep_type: str, original_file_content: str, updates_to_apply: List[Tuple[str, str, str]], oauth_token: str) -> Optional[str]:
@@ -682,18 +674,23 @@ def check_and_update(source: Optional[str], update: bool, dependency_file_path_o
 def propose_updates_command(repo_url: str, dependency_file_path_override: Optional[str]):
     """
     Checks a GitHub repository for outdated dependencies and proposes a PR with updates
-    using a GitHub Personal Access Token (PAT) for authorization.
+    using GitHub OAuth Device Flow for authorization.
     Use --dfp if the dependency file is not in the repository root.
     """
     if not PYGITHUB_AVAILABLE:
         console.print("[red]PyGithub library is not installed. Cannot create PR. Please run: pip install PyGithub[/red]")
         return
+    
+    if GITHUB_OAUTH_CLIENT_ID == "YOUR_GITHUB_OAUTH_CLIENT_ID":
+        console.print("[bold red]OAuth Client ID is not configured in the script.[/bold red]")
+        console.print("Please register an OAuth App on GitHub and set the GITHUB_OAUTH_CLIENT_ID in the script.")
+        return
 
     console.print(f"[cyan]Starting update proposal for repository: {repo_url}[/cyan]")
     
-    oauth_token = os.environ.get('GITHUB_TOKEN')
+    oauth_token = get_github_oauth_token() 
     if not oauth_token:
-        console.print("[red]GitHub token not set in environment variable GITHUB_TOKEN. Aborting.[/red]")
+        console.print("[red]Failed to obtain GitHub OAuth token. Aborting.[/red]")
         return
 
     updates, dep_type, dep_file_path = check_updates_parallel(repo_url, dependency_file_path_override)

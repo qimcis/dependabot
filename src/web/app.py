@@ -1,131 +1,250 @@
 from flask import Flask, render_template, request, jsonify
 import threading
-from typing import Optional, Dict, Any
 import time
+from typing import Dict, Any, Optional, List, Tuple
+import requests
 import sys
 import os
 
-# Add the parent directory to sys.path to import from src
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from main import check_updates_parallel, create_github_pr, get_github_oauth_token
+
+from main import (
+    check_updates_parallel,
+    create_github_pr,
+    GITHUB_OAUTH_CLIENT_ID,
+    GITHUB_OAUTH_SCOPES,
+    GITHUB_DEVICE_CODE_URL,
+    GITHUB_ACCESS_TOKEN_URL,
+)
 
 app = Flask(__name__)
 
-# Store OAuth tokens and job status
-oauth_tokens: Dict[str, str] = {}
-job_status: Dict[str, Dict[str, Any]] = {}
+# In-memory stores
+# Tracks ongoing OAuth device flows keyed by the GitHub device_code returned
+oauth_flows: Dict[str, Dict[str, Any]] = {}
 
-def generate_job_id() -> str:
-    """Generate a unique job ID."""
-    return f"job_{int(time.time())}_{threading.get_ident()}"
+# Helper utilities
 
-def process_repository(job_id: str, repo_url: str, dependency_file_path: Optional[str] = None):
-    """Process a repository in a background thread."""
-    try:
-        # Update job status
-        job_status[job_id].update({
-            "status": "processing",
-            "message": "Checking repository for updates..."
-        })
+def fetch_original_file_content(repo_url: str, dep_file_path: str) -> Optional[str]:
+    """Fetch the raw contents of the given dependency file from the repo."""
+    repo_path_cleaned = (
+        repo_url.replace("https://github.com/", "").replace("http://github.com/", "")
+    )
+    if repo_path_cleaned.endswith("/"):
+        repo_path_cleaned = repo_path_cleaned[:-1]
+    owner_repo = "/".join(repo_path_cleaned.split("/")[:2])
 
-        # Use PAT from environment variable
-        oauth_token = os.environ.get('GITHUB_TOKEN')
-        if not oauth_token:
-            job_status[job_id].update({
-                "status": "error",
-                "message": "GitHub token not set in environment variable GITHUB_TOKEN"
-            })
-            return
+    for branch in ["main", "master"]:
+        raw_url = f"https://raw.githubusercontent.com/{owner_repo}/{branch}/{dep_file_path}"
+        try:
+            resp = requests.get(raw_url, timeout=10)
+            if resp.status_code == 200:
+                return resp.text
+        except requests.RequestException:
+            continue
+    return None
 
-        # Check for updates
-        updates, dep_type, dep_file_path = check_updates_parallel(repo_url, dependency_file_path)
-        
-        if not updates:
-            job_status[job_id].update({
-                "status": "completed",
-                "message": "No updates found",
-                "updates": []
-            })
-            return
 
-        # Create PR
-        pr_url = create_github_pr(repo_url, dep_file_path, dep_type, "", updates, oauth_token)
-        
-        if pr_url:
-            job_status[job_id].update({
-                "status": "completed",
-                "message": "Successfully created PR",
-                "pr_url": pr_url,
-                "updates": [
-                    {
-                        "package": pkg,
-                        "current": curr,
-                        "latest": latest
-                    } for pkg, curr, latest in updates
-                ]
-            })
-        else:
-            job_status[job_id].update({
-                "status": "error",
-                "message": "Failed to create PR",
-                "updates": [
-                    {
-                        "package": pkg,
-                        "current": curr,
-                        "latest": latest
-                    } for pkg, curr, latest in updates
-                ]
-            })
+# Routes
 
-    except Exception as e:
-        job_status[job_id].update({
-            "status": "error",
-            "message": f"Error processing repository: {str(e)}"
-        })
-
-@app.route('/')
+@app.route("/")
 def index():
-    """Render the main page."""
-    return render_template('index.html')
+    return render_template("index.html")
 
-@app.route('/check', methods=['POST'])
-def check_repository():
-    """Handle repository check requests."""
-    data = request.get_json()
-    repo_url = data.get('repo_url')
-    dependency_file_path = data.get('dependency_file_path')
+
+@app.route("/check", methods=["POST"])
+def check_dependencies():
+    """Return the list of outdated dependencies for the provided repository."""
+    data = request.get_json() or {}
+    repo_url = data.get("repo_url")
+    dependency_file_path = data.get("dependency_file_path")
 
     if not repo_url:
-        return jsonify({"error": "Repository URL is required"}), 400
+        return jsonify({"error": "Repository URL is required."}), 400
 
-    # Generate job ID and initialize status
-    job_id = generate_job_id()
-    job_status[job_id] = {
-        "status": "queued",
-        "message": "Job queued for processing"
+    updates, dep_type, dep_file_path = check_updates_parallel(
+        repo_url, dependency_file_path
+    )
+
+    return jsonify(
+        {
+            "updates": [
+                {"package": p, "current": c, "latest": l} for p, c, l in updates
+            ],
+            "dependency_type": dep_type,
+            "dependency_file": dep_file_path,
+        }
+    )
+
+
+# PR creation flow helpers
+
+def poll_and_create_pr(device_code: str):
+    """Background task: poll GitHub OAuth endpoint, then create PR."""
+    flow = oauth_flows[device_code]
+    interval = flow.get("interval", 5)
+    expires_at = flow.get("expires_at", time.time() + 900)
+
+    while time.time() < expires_at:
+        time.sleep(interval)
+
+        # Poll for access token
+        try:
+            token_resp = requests.post(
+                GITHUB_ACCESS_TOKEN_URL,
+                data={
+                    "client_id": GITHUB_OAUTH_CLIENT_ID,
+                    "device_code": device_code,
+                    "grant_type": "urn:ietf:params:oauth:grant-type:device_code",
+                },
+                headers={"Accept": "application/json"},
+                timeout=10,
+            )
+            token_data = token_resp.json()
+        except Exception as exc:
+            flow.update({"status": "error", "message": f"Error polling token: {exc}"})
+            return
+
+        if "error" in token_data:
+            err = token_data["error"]
+            if err == "authorization_pending":
+                continue  # user hasn't authorized yet
+            if err == "slow_down":
+                interval += 5
+                continue
+            flow.update({"status": "error", "message": f"OAuth error: {err}"})
+            return
+
+        # Success
+        access_token = token_data.get("access_token")
+        if not access_token:
+            flow.update({"status": "error", "message": "No access token returned."})
+            return
+
+        flow.update({"status": "authorized", "message": "Authorized. Creating PR…"})
+
+        # Refresh updates to ensure we're creating PR against latest info
+        updates, dep_type, dep_file_path = check_updates_parallel(
+            flow["repo_url"], flow.get("dependency_file_path")
+        )
+        if not updates:
+            flow.update({"status": "error", "message": "No updates found."})
+            return
+
+        # Fetch original dependency file content
+        original_content = fetch_original_file_content(flow["repo_url"], dep_file_path)
+        if original_content is None:
+            flow.update(
+                {"status": "error", "message": "Could not fetch dependency file."}
+            )
+            return
+
+        pr_url = create_github_pr(
+            flow["repo_url"],
+            dep_file_path,
+            dep_type,
+            original_content,
+            updates,
+            access_token,
+        )
+
+        if pr_url:
+            flow.update(
+                {
+                    "status": "completed",
+                    "message": "Pull request created successfully.",
+                    "pr_url": pr_url,
+                    "updates": [
+                        {"package": p, "current": c, "latest": l}
+                        for p, c, l in updates
+                    ],
+                }
+            )
+        else:
+            flow.update(
+                {
+                    "status": "error",
+                    "message": "Failed to create pull request.",
+                }
+            )
+        return  # finished
+
+    # Timed out
+    flow.update({"status": "error", "message": "Authorization timed out."})
+
+
+@app.route("/start_pr", methods=["POST"])
+def start_pr():
+    data = request.get_json() or {}
+    repo_url = data.get("repo_url")
+    dependency_file_path = data.get("dependency_file_path")
+
+    if not repo_url:
+        return jsonify({"error": "Repository URL is required."}), 400
+
+    # First check there are updates worth creating a PR for
+    updates, dep_type, dep_file_path = check_updates_parallel(
+        repo_url, dependency_file_path
+    )
+    if not updates:
+        return jsonify({"error": "No updates found."}), 400
+
+    # Start GitHub device flow
+    try:
+        resp = requests.post(
+            GITHUB_DEVICE_CODE_URL,
+            data={"client_id": GITHUB_OAUTH_CLIENT_ID, "scope": GITHUB_OAUTH_SCOPES},
+            headers={"Accept": "application/json"},
+            timeout=10,
+        )
+        resp.raise_for_status()
+        device_data = resp.json()
+    except Exception as exc:
+        return jsonify({"error": f"Failed to start OAuth flow: {exc}"}), 500
+
+    device_code = device_data.get("device_code")
+    user_code = device_data.get("user_code")
+    verification_uri = device_data.get("verification_uri")
+    expires_in = device_data.get("expires_in", 900)
+    interval = device_data.get("interval", 5)
+
+    if not all([device_code, user_code, verification_uri]):
+        return jsonify({"error": "Incomplete response from GitHub."}), 500
+
+    # Store context
+    oauth_flows[device_code] = {
+        "repo_url": repo_url,
+        "dependency_file_path": dependency_file_path,
+        "updates": updates,
+        "dep_type": dep_type,
+        "dep_file_path": dep_file_path,
+        "status": "waiting_for_user",
+        "message": "Waiting for user authorization…",
+        "interval": interval,
+        "expires_at": time.time() + expires_in,
     }
 
-    # Start processing in background thread
-    thread = threading.Thread(
-        target=process_repository,
-        args=(job_id, repo_url, dependency_file_path)
+    # Spawn background thread
+    t = threading.Thread(target=poll_and_create_pr, args=(device_code,), daemon=True)
+    t.start()
+
+    return jsonify(
+        {
+            "device_code": device_code,
+            "user_code": user_code,
+            "verification_uri": verification_uri,
+            "expires_in": expires_in,
+        }
     )
-    thread.daemon = True
-    thread.start()
 
-    return jsonify({
-        "job_id": job_id,
-        "status": "queued",
-        "message": "Processing started"
-    })
 
-@app.route('/status/<job_id>')
-def get_status(job_id: str):
-    """Get the status of a job."""
-    if job_id not in job_status:
-        return jsonify({"error": "Job not found"}), 404
-    
-    return jsonify(job_status[job_id])
+@app.route("/pr_status/<device_code>")
+def pr_status(device_code: str):
+    flow = oauth_flows.get(device_code)
+    if not flow:
+        return jsonify({"error": "Unknown device code."}), 404
+    return jsonify(flow)
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     app.run(debug=True) 
