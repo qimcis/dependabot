@@ -42,7 +42,7 @@ def fetch_original_file_content(repo_url: str, dep_file_path: str) -> Optional[s
                 return resp.text
         except requests.RequestException:
             continue
-    return None
+    return None 
 
 
 # Routes
