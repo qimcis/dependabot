@@ -182,7 +182,9 @@
             // Create table html
             const tableBody = updates.map(u => `
                 <tr>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${u.package}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                        <a href="https://www.npmjs.com/package/${u.package}" target="_blank" rel="noopener noreferrer" class="text-blue-500 hover:underline">${u.package}</a>
+                    </td>
                     <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${u.current}</td>
                     <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${u.latest}</td>
                 </tr>
