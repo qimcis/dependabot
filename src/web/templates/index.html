@@ -47,6 +47,28 @@
         @keyframes spin {
             to { transform: rotate(360deg); }
         }
+
+        /* Custom Scrollbar Styles */
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: rgba(229, 231, 235, 0.5); /* Tailwind gray-200 with opacity */
+            border-radius: 10px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: rgba(156, 163, 175, 0.7); /* Tailwind gray-400 with opacity */
+            border-radius: 10px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+            background: rgba(107, 114, 128, 0.9); /* Tailwind gray-500 with opacity */
+        }
+        /* For Firefox */
+        .custom-scrollbar {
+            scrollbar-width: thin;
+            scrollbar-color: rgba(156, 163, 175, 0.7) rgba(229, 231, 235, 0.5); /* thumb_color track_color */
+        }
     </style>
 </head>
 <body class="text-gray-900">
@@ -292,7 +314,7 @@
             `).join('');
 
             resultsContent.innerHTML = `
-                <div class="overflow-x-auto max-h-96 overflow-y-auto">
+                <div class="overflow-x-auto max-h-96 overflow-y-auto custom-scrollbar">
                     <table class="min-w-full divide-y divide-gray-200">
                         <thead class="bg-gray-100">
                             <tr>
