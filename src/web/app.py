@@ -82,7 +82,7 @@ def check_dependencies():
 # PR creation flow helpers
 
 def poll_and_create_pr(device_code: str):
-    """Background task: poll GitHub OAuth endpoint, then create PR."""
+    """Background task: poll GitHub OAuth endpoint, then store access token and set status."""
     flow = oauth_flows[device_code]
     interval = flow.get("interval", 5)
     expires_at = flow.get("expires_at", time.time() + 900)
@@ -123,52 +123,9 @@ def poll_and_create_pr(device_code: str):
             flow.update({"status": "error", "message": "No access token returned."})
             return
 
-        flow.update({"status": "authorized", "message": "Authorized. Creating PR…"})
-
-        # Refresh updates to ensure we're creating PR against latest info
-        updates, dep_type, dep_file_path = check_updates_parallel(
-            flow["repo_url"], flow.get("dependency_file_path")
-        )
-        if not updates:
-            flow.update({"status": "error", "message": "No updates found."})
-            return
-
-        # Fetch original dependency file content
-        original_content = fetch_original_file_content(flow["repo_url"], dep_file_path)
-        if original_content is None:
-            flow.update(
-                {"status": "error", "message": "Could not fetch dependency file."}
-            )
-            return
-
-        pr_url = create_github_pr(
-            flow["repo_url"],
-            dep_file_path,
-            dep_type,
-            original_content,
-            updates,
-            access_token,
-        )
-
-        if pr_url:
-            flow.update(
-                {
-                    "status": "completed",
-                    "message": "Pull request created successfully.",
-                    "pr_url": pr_url,
-                    "updates": [
-                        {"package": p, "current": c, "latest": l}
-                        for p, c, l in updates
-                    ],
-                }
-            )
-        else:
-            flow.update(
-                {
-                    "status": "error",
-                    "message": "Failed to create pull request.",
-                }
-            )
+        # Store the access token and set status to authorized, but do NOT create the PR here
+        flow["access_token"] = access_token
+        flow.update({"status": "authorized", "message": "Authorized. Ready to create PR."})
         return  # finished
 
     # Timed out
@@ -275,32 +232,41 @@ def submit_pr():
     flow = oauth_flows.get(device_code)
     if not flow:
         return jsonify({"error": "Unknown device code."}), 400
-    access_token = flow.get("access_token")
-    if not access_token:
-        return jsonify({"error": "Not authorized yet."}), 400
-    # Use the latest updates and info from the flow
-    updates = flow["updates"]
-    dep_type = flow["dep_type"]
-    dep_file_path = flow["dep_file_path"]
-    repo_url = flow["repo_url"]
-    # Fetch original file content
-    original_content = fetch_original_file_content(repo_url, dep_file_path)
-    if original_content is None:
-        return jsonify({"error": "Could not fetch dependency file."}), 400
-    pr_url = create_github_pr(
-        repo_url,
-        dep_file_path,
-        dep_type,
-        original_content,
-        updates,
-        access_token,
-        pr_title,
-        pr_body,
-    )
-    if pr_url:
-        return jsonify({"pr_url": pr_url})
-    else:
-        return jsonify({"error": "Failed to create pull request."}), 500
+    
+    # Store the custom PR title and body in the flow data
+    flow["pr_title"] = pr_title
+    flow["pr_body"] = pr_body
+    
+    # If already authorized, create PR immediately
+    if flow.get("status") == "authorized":
+        access_token = flow.get("access_token")
+        if not access_token:
+            return jsonify({"error": "Not authorized yet."}), 400
+        # Use the latest updates and info from the flow
+        updates = flow["updates"]
+        dep_type = flow["dep_type"]
+        dep_file_path = flow["dep_file_path"]
+        repo_url = flow["repo_url"]
+        # Fetch original file content
+        original_content = fetch_original_file_content(repo_url, dep_file_path)
+        if original_content is None:
+            return jsonify({"error": "Could not fetch dependency file."}), 400
+        pr_url = create_github_pr(
+            repo_url,
+            dep_file_path,
+            dep_type,
+            original_content,
+            updates,
+            access_token,
+            pr_title,
+            pr_body,
+        )
+        if pr_url:
+            return jsonify({"pr_url": pr_url})
+        else:
+            return jsonify({"error": "Failed to create pull request."}), 500
+    
+    return jsonify({"status": "pending", "message": "PR creation pending authorization."})
 
 
 if __name__ == "__main__":
