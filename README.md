@@ -1,4 +1,5 @@
 # Dependency Management Bot (Dependabot CLI Clone)
+![image](https://github.com/user-attachments/assets/daf7b5f7-c140-4e7d-9a3c-0045a600bcd5)
 
 This script is a command-line tool to help manage and update your Python and Node.js package dependencies. It can check for outdated packages in your local environment or in a remote GitHub repository, and can propose updates via a Pull Request to a GitHub repository.
 
