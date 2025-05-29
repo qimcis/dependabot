@@ -87,6 +87,7 @@
 
         <!-- Action Card -->
         <section class="max-w-5xl w-full mx-auto rounded-lg border border-gray-200 p-4 sm:p-8 mb-8 sm:mb-12">
+            <div id="repoQuickAccess" class="mb-4"></div>
             <div class="mb-4">
                 <span class="font-instrument-serif text-2xl text-gray-900">Repository</span>
             </div>
@@ -500,6 +501,94 @@
             if (localStorage.getItem('repoUrl')) repoUrlInput.value = localStorage.getItem('repoUrl');
             if (localStorage.getItem('dependencyPath')) dependencyPathInput.value = localStorage.getItem('dependencyPath');
         });
+
+        // --- Recent & Starred Repo Logic ---
+        const RECENT_KEY = 'recentRepos';
+        const STARRED_KEY = 'starredRepos';
+        const MAX_RECENT = 7;
+
+        function getRecentRepos() {
+          return JSON.parse(localStorage.getItem(RECENT_KEY) || '[]');
+        }
+        function setRecentRepos(arr) {
+          localStorage.setItem(RECENT_KEY, JSON.stringify(arr));
+        }
+        function getStarredRepos() {
+          return JSON.parse(localStorage.getItem(STARRED_KEY) || '[]');
+        }
+        function setStarredRepos(arr) {
+          localStorage.setItem(STARRED_KEY, JSON.stringify(arr));
+        }
+
+        function addRecentRepo(url) {
+          if (!url) return;
+          let recents = getRecentRepos();
+          recents = recents.filter(r => r !== url);
+          recents.unshift(url);
+          if (recents.length > MAX_RECENT) recents = recents.slice(0, MAX_RECENT);
+          setRecentRepos(recents);
+        }
+        function toggleStarRepo(url) {
+          let stars = getStarredRepos();
+          if (stars.includes(url)) {
+            stars = stars.filter(r => r !== url);
+          } else {
+            stars.unshift(url);
+          }
+          setStarredRepos(stars);
+          renderRepoQuickAccess();
+        }
+
+        function renderRepoQuickAccess() {
+          const container = document.getElementById('repoQuickAccess');
+          if (!container) return;
+          const stars = getStarredRepos();
+          const recents = getRecentRepos().filter(r => !stars.includes(r));
+          let html = '';
+          if (stars.length) {
+            html += `<div class='mb-2'><span class='font-instrument-serif text-base text-gray-700 mr-2'>Starred:</span>`;
+            html += stars.map(url => `
+              <span class='inline-flex items-center bg-yellow-100 border border-yellow-300 rounded-full px-3 py-1 mr-2 mb-1 font-instrument-serif text-sm shadow-sm'>
+                <a href='#' class='hover:underline text-yellow-800 font-semibold repo-quick-link' data-url='${url}'>${url}</a>
+                <button title='Unstar' class='ml-2 text-yellow-500 hover:text-yellow-700 star-btn' data-url='${url}'>★</button>
+              </span>`).join('');
+            html += `</div>`;
+          }
+          if (recents.length) {
+            html += `<div><span class='font-instrument-serif text-base text-gray-700 mr-2'>Recent:</span>`;
+            html += recents.map(url => `
+              <span class='inline-flex items-center bg-gray-100 border border-gray-300 rounded-full px-3 py-1 mr-2 mb-1 font-instrument-serif text-sm shadow-sm'>
+                <a href='#' class='hover:underline text-blue-800 font-semibold repo-quick-link' data-url='${url}'>${url}</a>
+                <button title='Star' class='ml-2 text-gray-400 hover:text-yellow-500 star-btn' data-url='${url}'>☆</button>
+              </span>`).join('');
+            html += `</div>`;
+          }
+          container.innerHTML = html;
+          // Add click handlers
+          container.querySelectorAll('.repo-quick-link').forEach(el => {
+            el.onclick = e => {
+              e.preventDefault();
+              document.getElementById('repoUrl').value = el.dataset.url;
+              localStorage.setItem('repoUrl', el.dataset.url);
+              updateSuggestedRepoHighlight && updateSuggestedRepoHighlight();
+            };
+          });
+          container.querySelectorAll('.star-btn').forEach(el => {
+            el.onclick = e => {
+              e.preventDefault();
+              toggleStarRepo(el.dataset.url);
+            };
+          });
+        }
+
+        // On repo check, add to recent
+        form.addEventListener('submit', e => {
+          const url = document.getElementById('repoUrl').value.trim();
+          if (url) addRecentRepo(url);
+          setTimeout(renderRepoQuickAccess, 100); // update after
+        });
+
+        document.addEventListener('DOMContentLoaded', renderRepoQuickAccess);
     </script>
 </body>
 </html> 
